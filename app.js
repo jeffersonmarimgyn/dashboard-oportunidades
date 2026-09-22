@@ -210,11 +210,11 @@ function render(){
   // horizontes
   $("hz").innerHTML=Object.entries(HZ).map(([k,h])=>{ const s=agg(base.filter(h.f)); const won=base.filter(o=>h.f(o)&&o.p===100).length;
     return `<button class="hz ${k}" data-h="${k}" aria-pressed="${state.hz===k}">
-      <div class="name">${h.name}</div><div class="rule">${h.rule}</div>
+      <div class="name">${h.name}${k==="fc"?'<span class="tag">Compromisso do mês</span>':""}</div><div class="rule">${h.rule}</div>
       <div class="counts"><b>${s.n}</b>oportunidades &nbsp; <b>${s.contas}</b>contas${k==="fc"&&won?` &nbsp;· ${won} ganha(s)`:""}</div>
-      <div class="vals"><div class="vrow"><span>Adesão</span><b title="${full(s.ad)}">${brl(s.ad)}</b></div>
-      <div class="vrow"><span>Implantação</span><b title="${full(s.im)}">${brl(s.im)}</b></div>
-      <div class="vrow rr"><span>RR (mensal)</span><b title="${full(s.mrr)}">${brl(s.mrr)}</b></div></div></button>`}).join("");
+      <div class="vals"><div class="vrow"><span><i class="dot d-ad"></i>Adesão (CDU)</span><b class="v-ad" title="${full(s.ad)}">${brl(s.ad)}</b></div>
+      <div class="vrow"><span><i class="dot d-im"></i>Implantação (serviços)</span><b class="v-im" title="${full(s.im)}">${brl(s.im)}</b></div>
+      <div class="vrow"><span><i class="dot d-rr"></i>RR (mensal)</span><b class="v-rr" title="${full(s.mrr)}">${brl(s.mrr)}</b></div></div></button>`}).join("");
 
   const cur=inHz(), hn=HZ[state.hz].name;
 
@@ -226,10 +226,10 @@ function render(){
     const a=cur.filter(o=>o.etapa===e), ad=sum(a,"ad"), im=sum(a,"im"), rr=sum(a,"mrr");
     return `<div class="row" tabindex="0"><div>${esc(e)} <span style="color:var(--muted)">(${a.length})</span></div>
     <div class="track"><i class="c-ad" style="width:${ad/fmax*100}%"></i><i class="c-im" style="width:${im/fmax*100}%"></i><i class="c-mr" style="width:${rr/fmax*100}%"></i></div>
-    <div style="text-align:right">${brl(ad+im)}<br><small style="color:var(--muted)">RR ${brl(rr)}</small></div>
+    <div style="text-align:right">${brl(ad+im)}<br><small class="v-rr">RR ${brl(rr)}</small></div>
     <div class="tip" role="tooltip"><b>${esc(e)}</b><span>${a.length} ${a.length===1?"oportunidade":"oportunidades"} · ${new Set(a.map(o=>o.acc)).size} contas</span>
-      <div class="tl"><i class="c-ad"></i>Adesão<em>${full(ad)}</em></div>
-      <div class="tl"><i class="c-im"></i>Implantação<em>${full(im)}</em></div>
+      <div class="tl"><i class="c-ad"></i>Adesão (CDU)<em>${full(ad)}</em></div>
+      <div class="tl"><i class="c-im"></i>Implantação (serviços)<em>${full(im)}</em></div>
       <div class="tl sep">Adesão + Implantação<em>${full(ad+im)}</em></div>
       <div class="tl"><i class="c-mr"></i>RR (mensalidade)<em>${full(rr)}</em></div></div></div>`}).join("");
 
@@ -243,19 +243,28 @@ function render(){
   const a6=base.filter(o=>o.ad+o.im+o.mrr===0); if(a6.length) al.push(["Oportunidades sem valor", grp(a6)]);
   $("alerts").innerHTML= al.length? al.map(([t,d])=>`<li><b>${t}</b>${d}</li>`).join("") : `<li class="ok"><b>Nada a corrigir</b>Todas as oportunidades estão consistentes.</li>`;
 
-  // executivos
-  const cell=a=>{const s=agg(a);return `<td class="n">${s.n} / ${s.contas}</td><td class="n">${brl(s.ad)}</td><td class="n">${brl(s.im)}</td><td class="n">${brl(s.mrr)}</td>`};
-  $("execTbl").innerHTML=`<thead><tr><th rowspan="2">Executivo</th><th colspan="4" style="color:var(--fc)">Forecast</th><th colspan="4" style="color:var(--pp)">Pipeline</th><th colspan="4" style="color:var(--tt)">Total</th></tr>
-    <tr>${"<th class='n'>Opp / contas</th><th class='n'>Adesão</th><th class='n'>Implantação</th><th class='n'>RR</th>".repeat(3)}</tr></thead><tbody>`+
-    execs.map(e=>{const a=rows.filter(o=>o.exec===e);return `<tr><td>${esc(nm(e))}</td>${cell(a.filter(o=>o.fc))}${cell(a.filter(o=>o.pp))}${cell(a)}</tr>`}).join("")+"</tbody>";
+  // executivos: um bloco por executivo com os três horizontes
+  const blk=(k,a,ref,refLabel)=>{ const s=agg(a), oneTime=s.ad+s.im, refV=ref? sum(ref,"ad")+sum(ref,"im"):0, pct=refV? Math.round(oneTime/refV*100):null;
+    return `<div class="xh ${k}"><div class="xt"><b>${HZ[k].name}</b><em>${s.n} opp · ${s.contas} contas</em></div>
+      <div class="xv"><span><i class="dot d-ad"></i>Adesão</span><strong class="v-ad" title="${full(s.ad)}">${brl(s.ad)}</strong></div>
+      <div class="xv"><span><i class="dot d-im"></i>Implantação</span><strong class="v-im" title="${full(s.im)}">${brl(s.im)}</strong></div>
+      <div class="xv"><span><i class="dot d-rr"></i>RR mensal</span><strong class="v-rr" title="${full(s.mrr)}">${brl(s.mrr)}</strong></div>
+      ${ref?`<div class="xshare">${pct==null?"—":pct+"%"} ${refLabel}<div class="xbar"><i style="width:${Math.min(100,pct||0)}%"></i></div></div>`:""}</div>`; };
+  const ini=e=>{const p=execName(e).split(/\s+/).filter(w=>w.length>2);return ((p[0]||"?")[0]+((p[1]||"")[0]||"")).toUpperCase()};
+  const xrow=(label,sub,a,cls,avatar)=>{ const pp=a.filter(o=>o.pp);
+    return `<div class="xrow ${cls||""}"><div class="xwho"><span class="av">${avatar}</span><div><b>${esc(label)}</b><small>${sub}</small></div></div>
+      ${blk("fc",a.filter(o=>o.fc),pp,"do pipeline (adesão + impl.)")}${blk("pp",pp,a,"do total (adesão + impl.)")}${blk("tt",a)}</div>`; };
+  const ordem=[...execs].sort((x,y)=>{const f=e=>{const a=rows.filter(o=>o.exec===e);return [sum(a.filter(o=>o.fc),"ad")+sum(a.filter(o=>o.fc),"im"), sum(a.filter(o=>o.pp),"ad")+sum(a.filter(o=>o.pp),"im")]};const A=f(x),B=f(y);return B[0]-A[0]||B[1]-A[1]});
+  $("execList").innerHTML=(execs.length>1? xrow(`Time (${execs.length} executivos)`, `${new Set(rows.map(o=>o.acc)).size} contas · ${rows.length} oportunidades`, rows, "team", "∑") : "")+
+    ordem.map(e=>{const a=rows.filter(o=>o.exec===e);return xrow(nm(e), `${new Set(a.map(o=>o.acc)).size} contas · ${a.length} oportunidades`, a, "", ini(e))}).join("");
 
   // contas
   const q=state.q.toLowerCase(), byAcc={}; cur.forEach(o=>{(byAcc[o.acc]=byAcc[o.acc]||[]).push(o)});
   const peso=v=>sum(v,"ad")+sum(v,"im")+sum(v,"mrr");
   const accs=Object.entries(byAcc).filter(([k,v])=>!q||k.toLowerCase().includes(q)||v.some(o=>o.code.includes(q))).sort((a,b)=>peso(b[1])-peso(a[1]));
-  $("accTbl").innerHTML=`<thead><tr><th>Conta</th><th class="n">Opp</th><th>Etapa mais avançada</th><th>Fechamento</th><th class="n">Adesão</th><th class="n">Implantação</th><th class="n">RR</th></tr></thead><tbody>`+
+  $("accTbl").innerHTML=`<thead><tr><th>Conta</th><th class="n">Opp</th><th>Etapa mais avançada</th><th>Fechamento</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th></tr></thead><tbody>`+
    (accs.length? accs.map(([k,v])=>{ const dmin=v.filter(o=>o.d).map(o=>o.d).sort((a,b)=>a-b)[0], open=state.open.has(k);
-     let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b></td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${brl(sum(v,"ad"))}</td><td class="n">${brl(sum(v,"im"))}</td><td class="n">${brl(sum(v,"mrr"))}</td></tr>`;
+     let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b></td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n v-ad">${brl(sum(v,"ad"))}</td><td class="n v-im">${brl(sum(v,"im"))}</td><td class="n v-rr">${brl(sum(v,"mrr"))}</td></tr>`;
      if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n"><span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span></td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td></tr>`).join("");
      return h; }).join("") : `<tr><td colspan="7" style="color:var(--muted)">Nenhuma conta neste horizonte${q?" com essa busca":""}.</td></tr>`)+"</tbody>";
 }
