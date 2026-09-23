@@ -8,7 +8,9 @@ const TODAY = new Date();
 const CUR = TODAY.getFullYear()*12 + TODAY.getMonth();
 const $ = id => document.getElementById(id);
 
-let rows = [], ultimaCarga = null, pendente = null, papel = "usuario";
+let rows = [], ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
+const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
+const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
 let state = { hz:"pp", exec:"__all", q:"", open:new Set() };
 
 /* ---------- utilitários ---------- */
@@ -66,15 +68,48 @@ async function boot(){
 function mostrarLogin(){ $("app").classList.add("hidden"); $("login").classList.remove("hidden"); }
 async function entrar(){
   $("login").classList.add("hidden"); $("app").classList.remove("hidden");
-  const { data } = await db.rpc("meu_papel"); papel = data || "usuario";
+  const { data } = await db.rpc("meu_perfil");
+  papel = (data && data.papel) || "usuario"; meuT = data && data.codigo_t || null;
+  const vend = papel==="vendedor";
   $("limparBox").classList.toggle("hidden", papel!=="dono");
+  $("btnHist").classList.toggle("hidden", vend);
+  $("exec").classList.toggle("hidden", vend);
   $("histAviso").textContent = papel==="dono" ? "Desfazer uma carga faz os executivos dela voltarem para a carga anterior." : "Registro de todas as cargas feitas no painel.";
+  if(!data) say("Seu usuário ainda não foi liberado no painel. Peça ao responsável para cadastrar seu acesso.", false);
   await carregar();
+  // primeiro acesso: obriga a trocar a senha provisória
+  const { data:{ user } } = await db.auth.getUser();
+  if(user && !(user.user_metadata && user.user_metadata.senha_definida)) abrirSenha(true);
 }
+
+/* ---------- troca de senha ---------- */
+let senhaObrigatoria=false;
+function abrirSenha(obrigatoria){
+  senhaObrigatoria=obrigatoria;
+  $("senhaTitulo").textContent = obrigatoria? "Crie a sua senha" : "Alterar senha";
+  $("senhaTexto").textContent = obrigatoria? "Este é o seu primeiro acesso. Troque a senha provisória por uma senha só sua." : "Escolha uma nova senha para entrar no painel.";
+  $("senhaCancelar").classList.toggle("hidden", obrigatoria);
+  $("senha1").value=""; $("senha2").value=""; $("senhaErr").textContent="";
+  $("dlgSenha").showModal(); $("senha1").focus();
+}
+$("btnSenha").addEventListener("click", ()=>abrirSenha(false));
+$("senhaCancelar").addEventListener("click", ()=>$("dlgSenha").close());
+$("dlgSenha").addEventListener("cancel", e=>{ if(senhaObrigatoria) e.preventDefault(); });
+$("senhaForm").addEventListener("submit", async e=>{
+  e.preventDefault(); const a=$("senha1").value, b=$("senha2").value;
+  if(a.length<8){ $("senhaErr").textContent="A senha precisa ter pelo menos 8 caracteres."; return; }
+  if(a!==b){ $("senhaErr").textContent="As duas senhas não são iguais."; return; }
+  $("senhaSalvar").disabled=true;
+  const { error } = await db.auth.updateUser({ password:a, data:{ senha_definida:true } });
+  $("senhaSalvar").disabled=false;
+  if(error){ $("senhaErr").textContent = /different/i.test(error.message) ? "A nova senha precisa ser diferente da atual." : /weak|short|characters/i.test(error.message) ? "Senha fraca. Use mais caracteres, misturando letras e números." : "Não foi possível salvar: "+error.message; return; }
+  senhaObrigatoria=false; $("dlgSenha").close(); say("Senha alterada com sucesso.", true);
+});
 
 $("loginForm").addEventListener("submit", async e=>{
   e.preventDefault(); $("loginErr").textContent=""; $("btnEntrar").disabled=true;
-  const { error } = await db.auth.signInWithPassword({ email:$("email").value.trim(), password:$("senha").value });
+  let login=$("email").value.trim(); if(/^t\d+$/i.test(login)) login=login.toLowerCase()+"@"+DOM_T;
+  const { error } = await db.auth.signInWithPassword({ email:login, password:$("senha").value });
   $("btnEntrar").disabled=false;
   if(error){ $("loginErr").textContent = /invalid/i.test(error.message) ? "E-mail ou senha incorretos." : "Não foi possível entrar: "+error.message; return; }
   $("senha").value=""; entrar();
@@ -99,6 +134,7 @@ async function carregar(){
 function erroAmigavel(err){
   const m = err && (err.message||String(err)) || "";
   if(/Somente o responsável/i.test(m)) return m;
+  if(/function .*meu_perfil|does not exist/i.test(m)) return "O banco ainda não recebeu a última atualização (script alteracao-vendedor.sql).";
   if(/Acesso negado|permission|row-level/i.test(m)) return "Seu usuário não tem permissão. Confira se o e-mail está na tabela de administradores.";
   if(/Failed to fetch|NetworkError/i.test(m)) return "Sem conexão com o banco de dados. Verifique a internet e o arquivo config.js.";
   return "Erro: "+m;
@@ -119,12 +155,17 @@ $("file").addEventListener("change", async e=>{
       const l = raw.map(fromSheet).filter(x=>x.codigo);
       porArquivo.push({ nome:f.name, qtd:l.length }); linhas.push(...l);
     }
+    // vendedor: só as oportunidades do próprio código T
+    let ignoradas=0;
+    if(papel==="vendedor"){ const antes=linhas.length; linhas=linhas.filter(l=>codigoT(l.executivo)===meuT); ignoradas=antes-linhas.length;
+      if(!linhas.length) throw new Error(`Nenhuma oportunidade do seu código (${meuT}) nestas planilhas.`); }
     // mesma oportunidade em mais de um arquivo: vale a última
     const porCodigo=new Map(); linhas.forEach(l=>porCodigo.set(l.codigo,l)); const dup=linhas.length-porCodigo.size; linhas=[...porCodigo.values()];
     const execs=[...new Set(linhas.map(l=>l.executivo))].sort();
     pendente = { arquivos:files.map(f=>f.name), linhas, execs };
     $("cargaBody").innerHTML =
       `<ul class="files">${porArquivo.map(a=>`<li>${esc(a.nome)}: ${a.qtd} oportunidades</li>`).join("")}</ul>`+
+      (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. Você só pode atualizar a carteira do código ${meuT}.</p>`:"")+
       (dup?`<p style="font-size:13px;color:var(--muted)">${dup} oportunidade(s) repetida(s) entre arquivos foram consideradas uma vez só.</p>`:"")+
       `<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Depois da carga</th><th class="n">Contas</th></tr></thead><tbody>`+
       execs.map(x=>{ const hoje=rows.filter(o=>o.exec===x).length, nov=linhas.filter(l=>l.executivo===x);
@@ -142,7 +183,38 @@ $("cargaConfirmar").addEventListener("click", async ()=>{
   say(`Carga gravada: ${pendente.linhas.length} oportunidades de ${pendente.execs.length} executivo(s).`, true);
   pendente=null; await carregar();
 });
-document.querySelector(".upload").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $("file").click(); } });
+
+/* ---------- ajuda do upload ---------- */
+const AJUDA = [
+  ["Código","Código da oportunidade no CRM (único por oportunidade)"],
+  ["Nome da conta","Nome da empresa cliente"],
+  ["Tipo de oportunidade","Software ou Serviços"],
+  ["Etapa","Etapa do funil, ex.: 5. Propostas"],
+  ["Probabilidade","10%, 30%, 60%, 90% ou 100%"],
+  ["Data prevista (dias)","Data prevista de fechamento, ex.: 31/10/2026"],
+  ["Responsável","Nome do executivo com o código T entre parênteses, ex.: JOSE DA SILVA (T12345)"],
+  ["Valor SAAS","Mensalidade SaaS (entra no RR)"],
+  ["Valor SMS","Mensalidade SMS (entra no RR)"],
+  ["Valor CDU/Adesão","Valor de adesão / CDU (não recorrente)"],
+  ["Valor Serviços Não Recorrentes","Valor de implantação / serviços"],
+  ["Descrição","Opcional: descrição da oportunidade"]
+];
+$("ajudaCols").innerHTML = AJUDA.map(([c,d])=>`<tr><td style="white-space:nowrap"><b style="font-weight:600">${esc(c)}</b>${c==="Descrição"?' <span class="badge">opcional</span>':""}</td><td style="color:var(--muted)">${esc(d)}</td></tr>`).join("");
+const pularAjuda = () => { try{ return localStorage.getItem("opp-ajuda-upload")==="nao"; }catch(e){ return false; } };
+$("btnUpload").addEventListener("click", ()=>{ if(pularAjuda()) $("file").click(); else { $("ajudaNaoMostrar").checked=false; $("dlgAjuda").showModal(); } });
+$("verAjuda").addEventListener("click", e=>{ e.preventDefault(); $("ajudaNaoMostrar").checked=false; $("dlgAjuda").showModal(); });
+$("ajudaCancelar").addEventListener("click", ()=>$("dlgAjuda").close());
+$("ajudaEscolher").addEventListener("click", ()=>{
+  if($("ajudaNaoMostrar").checked){ try{ localStorage.setItem("opp-ajuda-upload","nao"); }catch(e){} }
+  $("dlgAjuda").close(); $("file").click();
+});
+$("ajudaModelo").addEventListener("click", ()=>{
+  const cab = REQUIRED.concat(["Descrição"]);
+  const ex = ["123456","EMPRESA EXEMPLO LTDA","Software","5. Propostas","30%","31/12/2026","JOSE DA SILVA (T12345)",1500,20000,800,35000,"Exemplo de oportunidade"];
+  const ws = XLSX.utils.aoa_to_sheet([cab, ex]); ws["!cols"]=cab.map(c=>({wch:Math.max(14,c.length+2)}));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Oportunidades");
+  XLSX.writeFile(wb, "modelo-oportunidades.xlsx");
+});
 
 /* ---------- histórico / desfazer / limpar ---------- */
 $("btnHist").addEventListener("click", abrirHistorico);
