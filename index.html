@@ -220,6 +220,25 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .hz.fc .hint{color:rgba(255,255,255,.85)}
 .hz[aria-pressed="true"] .hint{font-weight:650}
 .hz[aria-pressed="true"]{box-shadow:0 0 0 3px var(--c), 0 6px 18px rgba(0,0,0,.18)}
+
+/* filtro de data */
+.fsep{width:1px;height:22px;background:var(--line);margin:0 6px}
+.dwrap{position:relative;display:inline-flex;align-items:center;gap:8px}
+.dbtn{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer;display:inline-flex;gap:10px;align-items:center;min-width:150px;justify-content:space-between}
+.dbtn i{font-style:normal;color:var(--muted)}
+.dbtn.on{border-color:#2F7BEA;background:#2F7BEA;color:#fff;font-weight:650}
+.dbtn.on i{color:#fff}
+.dpop{position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:270px;max-height:340px;overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.25);padding:8px 6px}
+.drow{display:flex;align-items:center;gap:2px;padding:1px 0}
+.drow.l2{padding-left:20px} .drow.l3{padding-left:40px}
+.tw{font:inherit;width:22px;height:22px;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:4px;display:inline-grid;place-items:center;font-size:15px;transition:transform .12s;flex:none;padding:0}
+.tw.open{transform:rotate(90deg)} .tw.sp{cursor:default}
+.tw:not(.sp):hover{background:var(--paper)}
+.dn{display:flex;align-items:center;gap:8px;flex:1;font-size:13.5px;padding:5px 6px;border-radius:6px;cursor:pointer}
+.dn:hover{background:var(--paper)}
+.dn input{width:16px;height:16px;accent-color:#2F7BEA;margin:0;cursor:pointer}
+.dn.b span{font-weight:650}
+.dn em{margin-left:auto;font-style:normal;font-size:11.5px;color:var(--muted)}
 </style>
 </head>
 <body>
