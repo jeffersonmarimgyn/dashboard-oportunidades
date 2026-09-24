@@ -18,7 +18,7 @@
   --paper:#EEF3F9; --sheet:#FFFFFF; --ink:#0D2847; --muted:#5A6B80; --line:#D2DCE8;
   --fc:#E8590C; --fc-soft:#FDEBDD; --pp:#7C3AED; --pp-soft:#F0E9FE; --tt:#8497AE; --tt-soft:#E3E9F0;
   --warn:#B4432F; --warn-soft:#F6DED8; --band:#0A2D57; --band-ink:#FFFFFF;
-  --scc:#B7791F; --ad:#2563EB; --ad-soft:#E1EAFD; --im:#DB2777; --im-soft:#FCE4EF; --rr:#059669; --rr-soft:#D9F4EA;
+  --won:#059669; --scc:#B7791F; --ad:#2563EB; --ad-soft:#E1EAFD; --im:#DB2777; --im-soft:#FCE4EF; --rr:#059669; --rr-soft:#D9F4EA;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
@@ -26,13 +26,13 @@
   --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
   --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
   --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
-  --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --won:#34D399; --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}}
 :root[data-theme="dark"]{
   --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
   --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
   --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
-  --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --won:#34D399; --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -283,6 +283,11 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .dleg{display:grid;gap:5px;font-size:12.5px;color:var(--muted)}.dleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}.dleg b{color:var(--ink)}
 .chips-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 @media (max-width:1000px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.pj2{grid-template-columns:1fr}}
+
+/* situação */
+.tile.gw{border-top-color:var(--won);background:var(--rr-soft)}
+.pill.won{background:var(--rr-soft);color:var(--won);font-weight:700}
+.chip.seg.on{background:#0E9F6E;border-color:#0E9F6E}
 </style>
 </head>
 <body>

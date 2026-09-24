@@ -16,7 +16,7 @@ const $ = id => document.getElementById(id);
 let rows = [], ganhas = [], metas = [], metasOn = true, ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
 const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
 const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
-let state = { pv:"ad", hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
+let state = { sit:"and", pv:"ad", hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
 const pKey = o => o.p==null? "s" : String(o.p);
 const pOk0 = o => !state.probs.size || state.probs.has(pKey(o));
 /* filtro de data prevista: ano > trimestre > mês */
@@ -147,7 +147,7 @@ async function carregar(){
     if(error){ metasOn=false; break; }
     g.push(...data); if(data.length<1000) break; from+=1000;
   }
-  ganhas = g.map(r=>{ const o=toView(r); if(o.mi==null && r.carga_em){ const d=new Date(r.carga_em); o.mi=d.getFullYear()*12+d.getMonth(); } return o; });
+  ganhas = g.map(r=>{ const o=toView(r); o.won=true; if(o.mi==null && r.carga_em){ const d=new Date(r.carga_em); o.mi=d.getFullYear()*12+d.getMonth(); } return o; });
   if(metasOn){ const { data, error } = await db.from("metas").select("*"); if(error) metasOn=false; else metas=data||[]; }
   const { data:uc } = await db.from("cargas").select("criada_em,criada_por").eq("desfeita",false).order("criada_em",{ascending:false}).limit(1);
   ultimaCarga = uc && uc[0] || null;
@@ -283,7 +283,8 @@ $("btnLimpar").addEventListener("click", async ()=>{
 
 /* ---------- árvore de datas ---------- */
 function arvoreDatas(){
-  const cont={}; rows.forEach(o=>{ const k=mKey(o); cont[k]=(cont[k]||0)+1; });
+  // meses com oportunidades em andamento OU ganhas (as ganhas saem de "rows", mas precisam aparecer no filtro)
+  const cont={}; rows.concat(ganhas.filter(o=>state.exec==="__all"||o.exec===state.exec)).forEach(o=>{ const k=mKey(o); cont[k]=(cont[k]||0)+1; });
   const anos={};
   Object.keys(cont).filter(k=>k!=="sem").sort().forEach(k=>{ const [y,m]=k.split("-").map(Number), q=Math.ceil(m/3);
     ((anos[y]=anos[y]||{})[q]=anos[y][q]||[]).push({k,m,n:cont[k]}); });
@@ -291,6 +292,7 @@ function arvoreDatas(){
 }
 function rotuloDatas(t){
   const sel=[...state.meses]; if(!sel.length) return "Todos";
+  if(sel.length===1){ if(sel[0]==="sem") return "Sem data"; const [y,m]=sel[0].split("-"); return `${MESL[+m-1]}/${y}`; }
   const has=ks=>ks.every(k=>state.meses.has(k));
   for(const y in t.anos){ const ks=Object.values(t.anos[y]).flat().map(x=>x.k); if(sel.length===ks.length && has(ks)) return y;
     for(const q in t.anos[y]){ const kq=t.anos[y][q].map(x=>x.k); if(sel.length===kq.length && has(kq)) return `${q}º Tri ${y}`; } }
@@ -343,25 +345,28 @@ function render(){
   $("filters").innerHTML = `<div class="dwrap"><span class="fl">Data prevista</span>
       <button type="button" class="dbtn ${dAtivo?"on":""}" data-dt="1" aria-expanded="${state.dtOpen}">${esc(rotuloDatas(tD))}<i>▾</i></button>
       ${state.dtOpen?`<div class="dpop" role="dialog" aria-label="Filtro de data prevista">${htmlDatas(tD)}</div>`:""}</div>
+    <span class="fsep"></span><span class="fl">Situação</span>
+    ${[["and","Em andamento"],["gan","Ganhas"],["all","Todas"]].map(([k,t])=>`<button class="chip seg ${state.sit===k?"on":""}" data-sit="${k}">${t}</button>`).join("")}
     <span class="fsep"></span><span class="fl">Probabilidade</span>
     <button class="chip all ${state.probs.size?"":"on"}" data-p="__all" aria-pressed="${!state.probs.size}">Todas</button>`+
     pvals.map(v=>`<button class="chip ${state.probs.has(v)?"on":""}" data-p="${v}" aria-pressed="${state.probs.has(v)}">${v==="s"?"Sem probabilidade":v+"%"}</button>`).join("")+
     `<span class="pcount">${state.probs.size? `<b>${state.probs.size}</b> de ${pvals.length} selecionadas` : `todas as ${pvals.length} faixas`}</span>`+
-    (hzAtivo||state.probs.size||dAtivo? `<span class="fsum">Horizonte: <b>${hzAtivo?HZ[state.hz].name:"Total"}</b> · Data: <b>${esc(rotuloDatas(tD))}</b> · Probabilidade: <b>${state.probs.size?[...state.probs].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b).map(v=>v==="s"?"sem prob.":v+"%").join(", "):"todas"}</b></span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
+    (hzAtivo||state.probs.size||dAtivo||state.sit!=="and"? `<span class="fsum">Situação: <b>${{and:"em andamento",gan:"ganhas",all:"todas"}[state.sit]}</b> · Horizonte: <b>${hzAtivo?HZ[state.hz].name:"Total"}</b> · Data: <b>${esc(rotuloDatas(tD))}</b> · Probabilidade: <b>${state.probs.size?[...state.probs].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b).map(v=>v==="s"?"sem prob.":v+"%").join(", "):"todas"}</b></span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
 
   document.querySelectorAll('.dpop input[data-ind]').forEach(i=>i.indeterminate=true);
 
   // quadro por executivo (respeita horizonte, probabilidade e data)
-  const vis=base.filter(HZ[state.hz].f);
-  const rk=v=>v.some(o=>o.fc)?0:v.some(o=>o.pp)?1:2;
+  const gBase=ganhas.filter(o=>(state.exec==="__all"||o.exec===state.exec) && dOk(o));
+  const vis=(state.sit!=="gan"? base.filter(HZ[state.hz].f) : []).concat(state.sit!=="and"? gBase.filter(HZ[state.hz].f) : []);
+  const rk=v=>v.every(o=>o.won)?3: v.some(o=>!o.won&&o.fc)?0 : v.some(o=>!o.won&&o.pp)?1 : 2;
   if(!vis.length){ $("execBoards").innerHTML=`<div class="empty"><b>Nenhuma conta com estes filtros</b>Clique de novo no card selecionado ou em "Limpar filtros" para voltar a ver todas.</div>`; }
   else $("execBoards").innerHTML=[...new Set(vis.map(o=>o.exec))].sort((a,b)=>nm(a).localeCompare(nm(b),"pt-BR")).map(e=>{
     const a=vis.filter(o=>o.exec===e), m={}; a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});
     const list=Object.entries(m).sort((x,y)=>rk(x[1])-rk(y[1])||x[0].localeCompare(y[0],"pt-BR"));
-    return `<div class="board"><h2>Executivo: ${esc(nm(e))}<small>${list.length} contas em aberto · ${a.length} oportunidades</small></h2>
+    return `<div class="board"><h2>Executivo: ${esc(nm(e))}<small>${list.length} ${state.sit==="and"?"contas em aberto":"contas"} · ${a.length} oportunidades${state.sit!=="and"?` (${a.filter(o=>o.won).length} ganhas)`:""}</small></h2>
       <div class="meta">Atualizado em ${a[0].cargaEm? dt(a[0].cargaEm):"—"}</div>
-      <div class="leg"><span><i style="background:var(--fc)"></i>No forecast</span><span><i style="background:var(--pp)"></i>No pipeline</span><span><i style="background:var(--tt)"></i>Demais em andamento</span></div>
-      <div class="tiles">${list.map(([k,v])=>`<button class="tile ${["fc","pp","tt"][rk(v)]}" data-acc="${esc(k)}"><span class="an">${esc(title(k))}</span><span class="am">${v.length} ${v.length>1?"oportunidades":"oportunidade"} · ${esc(topEtapa(v))}</span></button>`).join("")}</div></div>`}).join("");
+      <div class="leg"><span><i style="background:var(--fc)"></i>No forecast</span><span><i style="background:var(--pp)"></i>No pipeline</span><span><i style="background:var(--tt)"></i>Demais em andamento</span>${state.sit!=="and"?'<span><i style="background:var(--won)"></i>Ganha</span>':""}</div>
+      <div class="tiles">${list.map(([k,v])=>`<button class="tile ${["fc","pp","tt","gw"][rk(v)]}" data-acc="${esc(k)}"><span class="an">${esc(title(k))}</span><span class="am">${v.length} ${v.length>1?"oportunidades":"oportunidade"} · ${esc(topEtapa(v))}</span></button>`).join("")}</div></div>`}).join("");
 
   // horizontes
   $("hz").innerHTML=Object.entries(HZ).map(([k,h])=>{ const s=agg(base.filter(h.f)); const won=0;
@@ -421,13 +426,13 @@ function render(){
     ordem.map(e=>{const a=rowsP.filter(o=>o.exec===e);return xrow(nm(e), `${new Set(a.map(o=>o.acc)).size} contas · ${a.length} oportunidades`, a, "", ini(e))}).join("");
 
   // contas
-  const q=state.q.toLowerCase(), byAcc={}; cur.forEach(o=>{(byAcc[o.acc]=byAcc[o.acc]||[]).push(o)});
+  const q=state.q.toLowerCase(), byAcc={}; vis.forEach(o=>{(byAcc[o.acc]=byAcc[o.acc]||[]).push(o)});
   const peso=v=>sum(v,"ad")+sum(v,"im")+sum(v,"mrr")+sum(v,"scc");
   const accs=Object.entries(byAcc).filter(([k,v])=>!q||k.toLowerCase().includes(q)||v.some(o=>o.code.includes(q))).sort((a,b)=>peso(b[1])-peso(a[1]));
   $("accTbl").innerHTML=`<thead><tr><th>Conta</th><th class="n">Opp</th><th>Etapa mais avançada</th><th>Fechamento</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th><th class="n h-scc">SCC</th></tr></thead><tbody>`+
    (accs.length? accs.map(([k,v])=>{ const dmin=v.filter(o=>o.d).map(o=>o.d).sort((a,b)=>a-b)[0], open=state.open.has(k);
      let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b></td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n v-ad">${brl(sum(v,"ad"))}</td><td class="n v-im">${brl(sum(v,"im"))}</td><td class="n v-rr">${brl(sum(v,"mrr"))}</td><td class="n v-scc">${brl(sum(v,"scc"))}</td></tr>`;
-     if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n"><span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span></td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td><td class="n">${full(o.scc)}</td></tr>`).join("");
+     if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n">${o.won?'<span class="pill won">Ganha</span>':`<span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span>`}</td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td><td class="n">${full(o.scc)}</td></tr>`).join("");
      return h; }).join("") : `<tr><td colspan="8" style="color:var(--muted)">Nenhuma conta com estes filtros${q?" com essa busca":""}.</td></tr>`)+"</tbody>";
 }
 
@@ -675,13 +680,14 @@ document.addEventListener("change",e=>{
   render();
 });
 document.addEventListener("click",e=>{
+  const st=e.target.closest("[data-sit]"); if(st){ state.sit=st.dataset.sit; render(); return; }
   const pv=e.target.closest("[data-pv]"); if(pv){ state.pv=pv.dataset.pv; renderProj(); return; }
   const dt=e.target.closest("[data-dt]"); if(dt){ state.dtOpen=!state.dtOpen; render(); return; }
   const ex=e.target.closest("[data-exp]"); if(ex){ const k=ex.dataset.exp; state.exp.has(k)?state.exp.delete(k):state.exp.add(k); render(); return; }
   if(state.dtOpen && !e.target.closest(".dpop")){ state.dtOpen=false; render(); }
   const h=e.target.closest("[data-h]"); if(h){ const k=h.dataset.h; state.hz = (state.hz===k || k==="tt") ? "tt" : k; render(); return; }
   const c=e.target.closest("[data-p]"); if(c){ const v=c.dataset.p;
-    if(v==="__all") state.probs.clear(); else if(v==="__clear"){ state.probs.clear(); state.meses.clear(); state.hz="tt"; } else state.probs.has(v)? state.probs.delete(v) : state.probs.add(v);
+    if(v==="__all") state.probs.clear(); else if(v==="__clear"){ state.probs.clear(); state.meses.clear(); state.hz="tt"; state.sit="and"; } else state.probs.has(v)? state.probs.delete(v) : state.probs.add(v);
     render(); return; }
   const t=e.target.closest(".tile"); if(t){ const k=t.dataset.acc; state.q=""; $("q").value=""; state.open.add(k); render();
     const r=[...document.querySelectorAll("tr.acc")].find(x=>x.dataset.a===k); if(r) r.scrollIntoView({behavior:"smooth",block:"center"}); return; }
