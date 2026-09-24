@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR" translate="no" class="notranslate">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="google" content="notranslate">
+<title>Oportunidades · Gestão comercial</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --paper:#EEF3F9; --sheet:#FFFFFF; --ink:#0D2847; --muted:#5A6B80; --line:#D2DCE8;
+  --fc:#E8590C; --fc-soft:#FDEBDD; --pp:#7C3AED; --pp-soft:#F0E9FE; --tt:#8497AE; --tt-soft:#E3E9F0;
+  --warn:#B4432F; --warn-soft:#F6DED8; --band:#0A2D57; --band-ink:#FFFFFF;
+  --ad:#2563EB; --ad-soft:#E1EAFD; --im:#DB2777; --im-soft:#FCE4EF; --rr:#059669; --rr-soft:#D9F4EA;
+  --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
+  --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
+  --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
+  --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}}
+:root[data-theme="dark"]{
+  --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
+  --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
+  --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
+  --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.45;font-variant-numeric:tabular-nums}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+.band{background:var(--band);color:var(--band-ink)}
+.band .inner{max-width:1180px;margin:0 auto;padding:22px 20px 24px}
+.band header.top{margin-bottom:0}
+.band .sub{color:rgba(255,255,255,.72)}
+.brand{display:flex;align-items:center;gap:16px}
+.brand img{height:40px;width:auto;display:none}
+.brand img.on{display:block}
+.brand .div{width:1px;align-self:stretch;background:rgba(255,255,255,.28);display:none}
+.brand img.on + .div{display:block}
+.band select{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.3)}
+.band select option{color:#0D2847}
+.band .upload{background:#fff;color:var(--band);border-color:#fff}
+header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;margin-bottom:28px}
+h1{font-size:34px;font-stretch:112%;font-weight:750;letter-spacing:-.01em;margin:0;line-height:1.05}
+.sub{color:var(--muted);margin-top:6px;font-size:14px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+select,button,.upload{font:inherit;font-size:14px;color:var(--ink);background:var(--sheet);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer}
+.upload{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:600}
+.upload input{display:none}
+:focus-visible{outline:3px solid #2F7BEA;outline-offset:2px}
+.msg{margin:-12px 0 20px;padding:10px 14px;border-radius:8px;font-size:14px;display:none}
+.msg.ok{display:block;background:var(--rr-soft)} .msg.err{display:block;background:var(--warn-soft);color:var(--warn)}
+
+/* quadro do executivo */
+.board{background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:22px}
+.board h2{margin:0 0 4px;font-size:24px;font-weight:750;font-stretch:110%}
+.board h2 small{font-size:14px;font-weight:500;color:var(--muted);font-stretch:100%;margin-left:6px}
+.board .leg{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:4px 0 18px}
+.board .leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.tile{font:inherit;color:var(--ink);text-align:left;background:var(--paper);border:1px solid var(--line);border-top:4px solid var(--tt);border-radius:10px;padding:14px 14px 12px;cursor:pointer;min-height:96px;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.tile:hover{border-color:var(--ink);border-top-color:inherit}
+.tile.fc{border-top-color:var(--fc);background:var(--fc-soft)} .tile.pp{border-top-color:var(--pp);background:var(--pp-soft)}
+.tile .an{font-weight:650;font-size:14.5px;line-height:1.25}
+.tile .am{font-size:12px;color:var(--muted)}
+
+
+/* horizontes */
+.horizons{display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:14px;margin-bottom:30px;align-items:stretch}
+.hz{font:inherit;color:var(--ink);background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;text-align:left;cursor:pointer;border-top:5px solid var(--c);transition:box-shadow .15s}
+.hz[aria-pressed="true"]{box-shadow:0 0 0 2px var(--c)}
+.hz.fc{--c:#F97316} .hz.pp{--c:var(--pp)} .hz.tt{--c:var(--tt)}
+.hz.pp{background:var(--pp-soft);border-color:var(--pp)}
+.hz.pp .name{color:var(--pp)}
+.hz.fc{background:linear-gradient(160deg,#F97316 0%,#C2410C 100%);color:#fff;border-color:#C2410C;border-top-color:#FDBA74;padding:22px 22px 18px}
+.hz.fc .rule,.hz.fc .counts,.hz.fc .vrow span{color:rgba(255,255,255,.88)}
+.hz.fc .counts b{color:#fff}
+.hz.fc .vrow{border-top-color:rgba(255,255,255,.3)}
+.hz.fc .name{font-size:22px}
+.hz.fc .tag{display:inline-block;margin-left:8px;font-size:11.5px;font-weight:650;background:#fff;color:#C2410C;border-radius:20px;padding:2px 9px;vertical-align:4px;font-stretch:100%}
+.hz .name{font-size:18px;font-weight:700;font-stretch:108%}
+.hz .rule{font-size:12.5px;color:var(--muted);margin:2px 0 14px}
+.hz .counts{font-size:13px;color:var(--muted);margin-bottom:12px}
+.hz .counts b{color:var(--ink);font-size:20px;font-weight:700;margin-right:3px}
+.vals{display:grid;gap:6px}
+.vrow{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;border-top:1px dashed var(--line);padding-top:6px}
+.vrow span{color:var(--muted);display:flex;align-items:center;gap:7px} .vrow b{font-weight:700}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.d-ad{background:var(--ad)} .d-im{background:var(--im)} .d-rr{background:var(--rr)}
+.v-ad{color:var(--ad)} .v-im{color:var(--im)} .v-rr{color:var(--rr)}
+.hz.fc .v-ad,.hz.fc .v-im,.hz.fc .v-rr{color:#fff}
+.hz.fc .dot,.xh.fc .dot{width:10px;height:10px;box-shadow:0 0 0 2px #fff}
+.hz.fc .d-ad,.xh.fc .d-ad{background:#2563EB} .hz.fc .d-im,.xh.fc .d-im{background:#DB2777} .hz.fc .d-rr,.xh.fc .d-rr{background:#059669}
+.hz.fc .vrow b{font-size:16px}
+th.h-ad{color:var(--ad)} th.h-im{color:var(--im)} th.h-rr{color:var(--rr)}
+.fcol{background:var(--fc-soft)}
+
+/* seções */
+.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:22px;margin-bottom:22px}
+section.card{background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:20px;min-width:0}
+section.card h3{margin:0 0 4px;font-size:17px;font-weight:700;font-stretch:106%}
+section.card .desc{color:var(--muted);font-size:13px;margin-bottom:14px}
+.funnel .row{display:grid;grid-template-columns:150px 1fr 110px;gap:10px;align-items:center;padding:5px 0;font-size:13.5px}
+.funnel .track{height:18px;background:var(--paper);border-radius:4px;overflow:hidden;display:flex}
+.funnel .track i{display:block;height:100%}
+.funnel .row{position:relative;border-radius:6px}
+.funnel .row:not(.head):hover,.funnel .row:focus-visible{background:var(--paper)}
+.funnel .row.head{font-size:11.5px;color:var(--muted);padding-bottom:2px}
+.funnel .row.head div:last-child{text-align:right;line-height:1.25}
+.tip{display:none;position:absolute;z-index:5;right:0;top:calc(100% + 4px);width:310px;background:var(--ink);color:var(--paper);border-radius:10px;padding:12px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.tip b{display:block;font-size:13.5px} .tip>span{display:block;opacity:.75;font-size:12px;margin-bottom:8px}
+.tip .tl{display:flex;align-items:center;gap:7px;padding:3px 0} .tip .tl em{margin-left:auto;font-style:normal;font-weight:650}
+.tip .tl i{width:9px;height:9px;border-radius:2px;display:inline-block;outline:1px solid rgba(255,255,255,.35)}
+.tip .tl.sep{border-top:1px solid rgba(255,255,255,.2);margin-top:4px;padding-top:6px;opacity:.85}
+.funnel .row:hover .tip,.funnel .row:focus .tip{display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.c-ad{background:var(--ad)} .c-im{background:var(--im)} .c-mr{background:var(--rr)}
+.alerts{list-style:none;margin:0;padding:0}
+.alerts li{border-left:3px solid var(--warn);background:var(--warn-soft);padding:9px 12px;border-radius:0 8px 8px 0;margin-bottom:8px;font-size:13.5px}
+.alerts li b{display:block;font-size:13px;color:var(--warn);margin-bottom:2px}
+.alerts .ok{border-left-color:var(--rr);background:var(--rr-soft)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12.5px;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.acc{cursor:pointer} tr.acc:hover td{background:var(--paper)}
+tr.det td{background:var(--paper);font-size:12.5px;color:var(--muted)}
+.pill{display:inline-block;font-size:11.5px;padding:2px 7px;border-radius:20px;background:var(--tt-soft);white-space:nowrap}
+.pill.hi{background:var(--fc-soft);color:var(--fc);font-weight:600}
+.search{width:100%;max-width:320px;margin-bottom:10px;font:inherit;font-size:14px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+footer{color:var(--muted);font-size:12.5px;margin-top:26px}
+@media (max-width:860px){.horizons{grid-template-columns:1fr}.hz.fc{order:-1}.grid2{grid-template-columns:1fr}.funnel .row{grid-template-columns:110px 1fr 90px}h1{font-size:28px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.band .ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
+.band .upload{display:inline-block}
+.meta{font-size:12.5px;color:var(--muted);margin:-2px 0 14px}
+.empty{background:var(--sheet);border:1px dashed var(--line);border-radius:14px;padding:40px 24px;text-align:center;color:var(--muted);margin-bottom:22px}
+.empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+/* login */
+#login{min-height:100vh;display:grid;place-items:center;background:var(--band);padding:20px}
+#login form{background:var(--sheet);border-radius:16px;padding:30px 28px;width:100%;max-width:380px;display:grid;gap:14px}
+#login h1{font-size:26px} #login p{margin:0;color:var(--muted);font-size:14px}
+#login label{display:grid;gap:5px;font-size:13px;font-weight:600}
+#login input,.dlg select{font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+.primary{background:var(--band)!important;color:#fff!important;border-color:var(--band)!important;font-weight:650}
+.danger{color:var(--warn)!important;border-color:var(--warn)!important;background:transparent!important}
+#loginErr{color:var(--warn);font-size:13.5px;min-height:1em}
+/* diálogos */
+dialog.dlg{border:0;border-radius:16px;padding:0;width:min(720px,94vw);max-height:88vh;background:var(--sheet);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
+.dlg .hd{padding:20px 22px 6px} .dlg .hd h3{margin:0;font-size:19px} .dlg .hd p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+.dlg .bd{padding:10px 22px;overflow:auto;max-height:58vh}
+.dlg .ft{padding:14px 22px 20px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.dlg ul.files{margin:0 0 10px;padding-left:18px;font-size:13.5px;color:var(--muted)}
+.badge{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:20px;background:var(--tt-soft);color:var(--muted)}
+.badge.undo{background:var(--warn-soft);color:var(--warn)} .badge.clean{background:var(--pp-soft);color:var(--ink)}
+.row-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.hidden{display:none!important}
+
+/* por executivo */
+.xrow{display:grid;grid-template-columns:230px 1.2fr 1fr 1fr;gap:12px;align-items:stretch;padding:14px;border:1px solid transparent;border-top-color:var(--line)}
+.xrow:first-child{border-top-color:transparent}
+.xrow.team{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.xrow.team + .xrow{border-top:0}
+.xwho{display:flex;gap:12px;align-items:center;min-width:0}
+.av{flex:none;width:42px;height:42px;border-radius:50%;background:#2F7BEA;color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px;letter-spacing:.02em}
+.xrow.team .av{background:var(--pp);font-size:18px}
+.xwho b{display:block;font-size:15px;font-weight:700;line-height:1.25}
+.xwho small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.xh{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--sheet);border-left:4px solid var(--c)}
+.xh.fc{--c:#FDBA74;background:linear-gradient(160deg,#F97316 0%,#C2410C 100%);border-color:#C2410C;border-left-color:#FDBA74;color:#fff}
+.xh.pp{--c:var(--pp);background:var(--pp-soft);border-color:var(--pp)} .xh.tt{--c:var(--tt)}
+.xt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.xt b{font-size:13.5px;font-weight:700;color:var(--c)}
+.xh.fc .xt b{color:#fff}
+.xt em{font-style:normal;font-size:12px;color:var(--muted)}
+.xh.fc .xt em{color:rgba(255,255,255,.88)}
+.xv{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:2px 0}
+.xv span{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.xh.fc .xv span{color:rgba(255,255,255,.9)}
+.xv strong{font-weight:700}
+.xh.fc .v-ad,.xh.fc .v-im,.xh.fc .v-rr{color:#fff}
+
+.xshare{margin-top:7px;font-size:11.5px;color:var(--muted)}
+.xh.fc .xshare{color:rgba(255,255,255,.88)}
+.xbar{height:4px;border-radius:3px;background:var(--line);margin-top:4px;overflow:hidden}
+.xh.fc .xbar{background:rgba(255,255,255,.3)}
+.xh.fc .xbar i{background:#fff}
+.xbar i{display:block;height:100%;background:var(--c)}
+@media (max-width:1000px){.xrow{grid-template-columns:1fr 1fr 1fr}.xwho{grid-column:1/-1}}
+@media (max-width:640px){.xrow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="hidden">
+  <form id="loginForm">
+    <h1>Oportunidades</h1>
+    <p>Entre com seu e-mail ou código T e senha.</p>
+    <label>E-mail ou código T<input type="text" id="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="nome@totvs.com.br ou T12345" required></label>
+    <label>Senha<input type="password" id="senha" autocomplete="current-password" required></label>
+    <div id="loginErr" role="alert"></div>
+    <button type="submit" class="primary" id="btnEntrar">Entrar</button>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+<div class="band"><div class="inner">
+  <header class="top">
+    <div class="brand">
+      <img id="logo" alt="Logo da empresa" src="">
+      <span class="div"></span>
+      <div>
+        <h1>Oportunidades em andamento</h1>
+        <div class="sub" id="source"></div>
+      </div>
+    </div>
+    <div class="controls">
+      <label for="exec" style="position:absolute;left:-9999px">Executivo</label>
+      <select id="exec"></select>
+      <button class="ghost" id="btnHist">Histórico</button>
+      <button class="upload" id="btnUpload" type="button">Carregar planilhas</button>
+      <input type="file" id="file" accept=".xls,.xlsx" multiple class="hidden">
+      <button class="ghost" id="btnSenha">Alterar senha</button>
+      <button class="ghost" id="btnSair">Sair</button>
+    </div>
+  </header>
+</div></div>
+<div class="wrap">
+  <div class="msg" id="msg" style="margin-top:0" role="status"></div>
+  <div id="execBoards"></div>
+  <div id="dash">
+  <div class="horizons" id="hz"></div>
+  <div class="grid2">
+    <section class="card">
+      <h3>Funil por etapa</h3>
+      <div class="desc" id="funnelDesc"></div>
+      <div class="funnel" id="funnel"></div>
+      <div class="legend"><span><i class="c-ad"></i>Adesão (CDU)</span><span><i class="c-im"></i>Implantação (serviços)</span><span><i class="c-mr"></i>RR (mensalidade: SaaS + SMS)</span></div>
+    </section>
+    <section class="card">
+      <h3>Pontos de atenção</h3>
+      <div class="desc">Inconsistências que mudam o forecast.</div>
+      <ul class="alerts" id="alerts"></ul>
+    </section>
+  </div>
+  <section class="card" style="margin-bottom:22px">
+    <h3>Por executivo</h3>
+    <div class="desc">Forecast, pipeline e total de cada executivo, sem depender do filtro acima.</div>
+    <div id="execList"></div>
+  </section>
+  <section class="card" style="margin-bottom:22px">
+    <h3>Por conta</h3>
+    <div class="desc">Clique em uma conta para ver as oportunidades dela.</div>
+    <input class="search" id="q" placeholder="Buscar conta ou código" aria-label="Buscar conta ou código">
+    <div class="tbl"><table id="accTbl"></table></div>
+  </section>
+  </div>
+  <footer>Forecast: fechamento no mês atual com probabilidade de 60% ou mais. Pipeline: fechamento entre o início do mês atual e o fim do segundo mês seguinte. Total: todas as oportunidades em andamento. RR = SaaS + SMS (mensalidade). · <a href="#" id="verAjuda" style="color:inherit">Como exportar a planilha</a></footer>
+</div>
+</div>
+
+<!-- CONFIRMAR CARGA -->
+<dialog class="dlg" id="dlgCarga">
+  <div class="hd"><h3>Confirmar carga</h3><p>Cada executivo abaixo terá a carteira substituída pelo conteúdo destas planilhas. Os demais não mudam.</p></div>
+  <div class="bd" id="cargaBody"></div>
+  <div class="ft"><button id="cargaCancelar">Cancelar</button><button class="primary" id="cargaConfirmar">Confirmar carga</button></div>
+</dialog>
+
+<!-- AJUDA DO UPLOAD -->
+<dialog class="dlg" id="dlgAjuda">
+  <div class="hd"><h3>Antes de carregar: como exportar a planilha</h3><p>Exporte as oportunidades do CRM em Excel (.xlsx ou .xls). O painel lê a primeira aba e precisa destas colunas, com o nome exatamente igual na primeira linha:</p></div>
+  <div class="bd">
+    <div class="tbl"><table>
+      <thead><tr><th>Coluna</th><th>O que deve conter</th></tr></thead>
+      <tbody id="ajudaCols"></tbody>
+    </table></div>
+    <ul style="font-size:13.5px;color:var(--muted);padding-left:18px;margin:14px 0 4px;display:grid;gap:4px">
+      <li>Pode ter outras colunas a mais; elas são ignoradas. A ordem das colunas não importa.</li>
+      <li>Os nomes dos cabeçalhos precisam ser idênticos, com acentos e maiúsculas.</li>
+      <li>Pode enviar um arquivo por executivo ou um arquivo com vários executivos.</li>
+      <li>Cada carga substitui a carteira dos executivos que aparecem nela; os demais não mudam.</li>
+    </ul>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="ajudaNaoMostrar"> Não mostrar esta ajuda de novo</label>
+  </div>
+  <div class="ft"><button id="ajudaModelo" type="button">Baixar modelo em Excel</button><button id="ajudaCancelar" type="button">Cancelar</button><button class="primary" id="ajudaEscolher" type="button">Escolher arquivos</button></div>
+</dialog>
+
+<!-- SENHA -->
+<dialog class="dlg" id="dlgSenha" style="width:min(440px,94vw)">
+  <form id="senhaForm">
+    <div class="hd"><h3 id="senhaTitulo">Alterar senha</h3><p id="senhaTexto">Escolha uma nova senha para entrar no painel.</p></div>
+    <div class="bd" style="display:grid;gap:12px">
+      <label style="display:grid;gap:5px;font-size:13px;font-weight:600">Nova senha<input type="password" id="senha1" autocomplete="new-password" minlength="8" required style="font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)"></label>
+      <label style="display:grid;gap:5px;font-size:13px;font-weight:600">Repita a nova senha<input type="password" id="senha2" autocomplete="new-password" minlength="8" required style="font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)"></label>
+      <div style="font-size:12.5px;color:var(--muted)">Mínimo de 8 caracteres. Evite usar a mesma senha da rede.</div>
+      <div id="senhaErr" role="alert" style="color:var(--warn);font-size:13.5px;min-height:1em"></div>
+    </div>
+    <div class="ft"><button type="button" id="senhaCancelar">Cancelar</button><button type="submit" class="primary" id="senhaSalvar">Salvar nova senha</button></div>
+  </form>
+</dialog>
+
+<!-- HISTÓRICO -->
+<dialog class="dlg" id="dlgHist">
+  <div class="hd"><h3>Histórico de cargas</h3><p id="histAviso"></p></div>
+  <div class="bd">
+    <div class="tbl"><table id="histTbl"></table></div>
+    <div class="row-actions hidden" id="limparBox">
+      <label for="limparSel" style="font-size:13.5px;font-weight:600">Limpar carteira de</label>
+      <select id="limparSel"></select>
+      <button class="danger" id="btnLimpar">Limpar executivo</button>
+    </div>
+  </div>
+  <div class="ft"><button id="histFechar">Fechar</button></div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
