@@ -253,7 +253,8 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .mvs{display:grid;gap:10px;min-width:0}
 .mv{display:grid;grid-template-columns:120px 1fr 290px;gap:12px;align-items:center}
 .mvl{display:flex;align-items:center;gap:7px;font-size:13.5px}
-.mvl b{font-weight:650}
+.mvl b{font-weight:650;display:block}
+.mmeta{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
 .mbar{height:12px;border-radius:6px;background:var(--line);overflow:hidden;display:flex}
 .mbar i{display:block;height:100%}
 .mr.ok{background:#059669} .mr.at{background:#D97706} .mr.rk{background:#DC2626} .mr.sm{background:var(--tt)}
@@ -262,11 +263,26 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .mvt{font-size:12px;color:var(--muted);margin-top:4px} .mvt b{color:var(--ink)}
 .mvn{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}
 .mst{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap}
-.mvn small{font-size:12px;color:var(--muted)}
+.mvn small{font-size:12px;color:var(--muted)} .mvn small b{color:var(--ink);font-weight:650} .falta{color:var(--warn);font-weight:650}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mmed.ok,:root:not([data-theme="light"]) .mst.ok{background:#064E3B;color:#6EE7B7}
  :root:not([data-theme="light"]) .mmed.at,:root:not([data-theme="light"]) .mst.at{background:#451A03;color:#FCD34D}
  :root:not([data-theme="light"]) .mmed.rk,:root:not([data-theme="light"]) .mst.rk{background:#450A0A;color:#FCA5A5}}
 @media (max-width:1000px){.mrow{grid-template-columns:1fr}.mv{grid-template-columns:110px 1fr}.mvn{grid-column:1/-1;align-items:flex-start;text-align:left;flex-direction:row;flex-wrap:wrap;gap:8px}}
+
+/* projeções */
+:root{--c-ad:var(--ad);--c-im:var(--im);--c-rr:var(--rr);--c-scc:var(--scc)}
+.pjbox{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.pjhd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}.pjhd b{font-weight:700;font-size:14.5px}.pjhd span{font-size:12px;color:var(--muted)}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.gc{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center}
+.gc h4{margin:0 0 2px;font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
+.gbig{font-size:22px;font-weight:750;margin-top:-6px} .gsub{font-size:11.5px;color:var(--muted)}
+.gnone{font-size:12.5px;color:var(--muted);padding:26px 0 10px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:1px 8px;font-size:12px;color:var(--muted);text-align:left;margin-top:6px}.kv b{color:var(--ink);font-weight:650;text-align:right}
+.pj2{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr);gap:12px;margin-top:12px}
+.dleg{display:grid;gap:5px;font-size:12.5px;color:var(--muted)}.dleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}.dleg b{color:var(--ink)}
+.chips-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+@media (max-width:1000px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.pj2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -319,6 +335,23 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
     <div class="desc" id="metasDesc"></div>
     <div class="legend" style="margin:0 0 12px"><span><i style="background:#059669"></i>Realizado no caminho (100%+)</span><span><i style="background:#D97706"></i>Atenção (70–99%)</span><span><i style="background:#DC2626"></i>Em risco (&lt;70%)</span><span><i style="background:repeating-linear-gradient(45deg,rgba(47,123,234,.7) 0 3px,rgba(47,123,234,.3) 3px 6px)"></i>Listrado = previsto no período</span></div>
     <div id="metasBody"></div>
+  </section>
+  <section class="card hidden" id="projCard" style="margin-bottom:22px">
+    <h3>Projeções</h3>
+    <div class="desc">Previsto = em andamento com data prevista no período (segue o filtro de probabilidade). Ponderado = cada conta multiplicada pela sua probabilidade.</div>
+    <div class="pjbox">
+      <div class="pjhd"><b id="projTit"></b><span id="projSub"></span></div>
+      <div class="g4" id="gauges"></div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:#E24B4A"></i>até 70%</span><span><i style="background:#EF9F27"></i>70–99%</span><span><i style="background:#1D9E75"></i>100%+</span><span>ponteiro cheio = projeção (realizado + previsto) · tracejado = ponderada · escala até 150%</span></div>
+    </div>
+    <div class="pj2">
+      <div class="pjbox"><div class="pjhd"><b>De onde vem o previsto</b><span>por probabilidade</span></div><div id="donut"></div></div>
+      <div class="pjbox"><div class="pjhd"><b id="pipeTit"></b><span id="pipeCob" class="mst"></span></div>
+        <div class="chips-row" id="pipeChips"></div>
+        <svg width="100%" viewBox="0 0 560 152" style="max-height:190px;display:block" role="img" aria-label="Meta e pipeline por mês" id="pipeBars"></svg>
+        <div class="legend" style="margin-top:4px"><span><i style="background:var(--tt)"></i>meta do mês</span><span><i style="background:#2F7BEA"></i>pipeline (em andamento, todas as probabilidades)</span><span>referência saudável: 3x</span></div>
+      </div>
+    </div>
   </section>
   <div class="grid2">
     <section class="card">

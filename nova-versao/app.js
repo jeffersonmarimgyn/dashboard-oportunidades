@@ -16,7 +16,7 @@ const $ = id => document.getElementById(id);
 let rows = [], ganhas = [], metas = [], metasOn = true, ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
 const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
 const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
-let state = { hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
+let state = { pv:"ad", hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
 const pKey = o => o.p==null? "s" : String(o.p);
 const pOk0 = o => !state.probs.size || state.probs.has(pKey(o));
 /* filtro de data prevista: ano > trimestre > mês */
@@ -443,17 +443,26 @@ const keyMi = mi => `${Math.floor(mi/12)}-${String(mi%12+1).padStart(2,"0")}`;
 const CURK = keyMi(CUR);
 function periodo(){
   const ks=[...state.meses].filter(k=>k!=="sem").sort();
+  if(ks.length){ let label=rotuloDatas(arvoreDatas());
+    if(/meses$/.test(label)) label=ks.map(k=>{ const [y,m]=k.split("-"); return MES[+m-1]+"/"+y.slice(2); }).join(", ");
+    return {ks, label}; }
   return ks.length? {ks, label: rotuloDatas(arvoreDatas())} : {ks:[CURK], label:`${MESL[TODAY.getMonth()]}/${TODAY.getFullYear()} (mês atual)`};
 }
 const pct = (a,b) => b>0? a/b*100 : null;
 const fmtPct = v => v==null? "—" : (v>=999? ">999" : Math.round(v))+"%";
 const stat = v => v==null? ["sm","Sem meta"] : v>=100? ["ok","No caminho"] : v>=70? ["at","Atenção"] : ["rk","Em risco"];
 
-function renderMetas(){
+function mesesPipe(P){
+  const [y,m]=P.ks[0].split("-").map(Number); const ini=Math.max(CUR, y*12+m-1);
+  return [0,1,2].map(i=>keyMi(ini+i));
+}
+const rotMes = k => { const [y,m]=k.split("-"); return MES[+m-1]+"/"+y.slice(2); };
+function renderMetas(){ renderMetas0(); renderProj(); }
+function renderMetas0(){
   const card=$("metasCard");
   if(!metasOn){ card.classList.remove("hidden"); $("metasDesc").textContent=""; $("metasBody").innerHTML=`<div class="empty" style="margin:0"><b>Metas ainda não ativadas no banco</b>Rode o script alteracao-metas.sql no Supabase.</div>`; return; }
   const P=periodo(), inP=o=>o.mi!=null && P.ks.includes(keyMi(o.mi));
-  const P3=[0,1,2].map(i=>keyMi(CUR+i));
+  const P3=mesesPipe(P);
   // códigos visíveis
   let cods=new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.map(o=>codigoT(o.exec)), ...ganhas.map(o=>codigoT(o.exec))].filter(Boolean));
   if(papel==="vendedor") cods=new Set(meuT?[meuT]:[]);
@@ -468,29 +477,107 @@ function renderMetas(){
       const pipe3= rows.filter(o=>cs.has(codigoT(o.exec)) && o.pp).reduce((a,o)=>a+o[v.k],0);
       r[v.k]={meta,real,fc,at:pct(real,meta),proj:pct(real+fc,meta),gap:Math.max(0,meta-real-fc),cob: meta3>0? pipe3/meta3 : null};
     });
-    const ats=VERT.map(v=>r[v.k].at).filter(x=>x!=null).map(x=>Math.min(100,x)); r.media = ats.length? ats.reduce((a,b)=>a+b,0)/ats.length : null;
+    const avg=f=>{ const xs=VERT.map(v=>r[v.k][f]).filter(x=>x!=null).map(x=>Math.min(100,x)); return xs.length? xs.reduce((a,b)=>a+b,0)/xs.length : null; };
+    r.media = avg("at"); r.mproj = avg("proj");
     r.nG = ganhas.filter(o=>cs.has(codigoT(o.exec)) && inP(o)).length;
     return r; };
   const linha = (v,x) => { const [sc,st]=stat(x.proj), a=Math.min(100,x.at||0), f=Math.max(0,Math.min(100,(x.proj||0))-a);
     return `<div class="mv">
-      <div class="mvl"><i class="dot d-${v.cls}"></i><b>${v.nome}</b></div>
+      <div class="mvl"><i class="dot d-${v.cls}"></i><div><b>${v.nome}</b><span class="mmeta">Meta ${x.meta? brl(x.meta) : "—"}</span></div></div>
       <div class="mvb"><div class="mbar" title="Realizado ${full(x.real)} · Previsto no período ${full(x.fc)} · Meta ${full(x.meta)}"><i class="mr ${sc}" style="width:${a}%"></i><i class="mf" style="width:${f}%"></i></div>
-        <div class="mvt">${x.meta? `<b>${fmtPct(x.at)}</b> realizado · <span>com previsto ${fmtPct(x.proj)}</span>` : `<span>sem meta no período${x.real+x.fc?` · realizado ${brl(x.real)} · previsto ${brl(x.fc)}`:""}</span>`}</div></div>
+        <div class="mvt">${x.meta? `<b>${fmtPct(x.at)}</b> realizado · projeção <b>${fmtPct(x.proj)}</b> <span>(realizado + previsto)</span>` : `<span>sem meta no período${x.real+x.fc?` · realizado ${brl(x.real)} · previsto ${brl(x.fc)}`:""}</span>`}</div></div>
       <div class="mvn"><span class="mst ${sc}">${st}</span>
-        <small>${brl(x.real)} de ${brl(x.meta)}${x.meta&&x.gap>0?` · falta ${brl(x.gap)}`:""}${x.fc?` · previsto ${brl(x.fc)}`:""}${x.cob!=null?` · pipe 3m ${x.cob.toLocaleString("pt-BR",{maximumFractionDigits:1})}x`:""}</small></div>
+        <small>Meta <b>${brl(x.meta)}</b> · Realizado <b>${brl(x.real)}</b> · Previsto <b>${brl(x.fc)}</b></small>
+        <small>${x.meta? (x.real+x.fc>=x.meta? `<span class="v-rr">Folga ${brl(x.real+x.fc-x.meta)}</span>` : `<span class="falta">Falta ${brl(x.meta-x.real-x.fc)}</span>`) : ""}${x.cob!=null?`${x.meta?" · ":""}pipe ${rotMes(P3[0]).split("/")[0]}–${rotMes(P3[2]).split("/")[0]} ${x.cob.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})}x`:""}</small></div>
     </div>`; };
   const bloco = (label,sub,avatar,cs,cls) => { const r=calc(cs);
-    return {media:r.media, html:`<div class="mrow ${cls||""}"><div class="xwho"><span class="av">${avatar}</span><div><b>${esc(label)}</b><small>${sub}${r.nG?` · ${r.nG} ganha(s) no período`:""}</small>
-      ${r.media!=null?`<span class="mmed ${stat(r.media)[0]}" title="Média do atingimento das vertentes com meta, cada uma limitada a 100%">${fmtPct(r.media)} de atingimento médio</span>`:""}</div></div>
+    return {media:r.mproj, html:`<div class="mrow ${cls||""}"><div class="xwho"><span class="av">${avatar}</span><div><b>${esc(label)}</b><small>${sub}${r.nG?` · ${r.nG} ganha(s) no período`:""}</small>
+      ${r.media!=null?`<span class="mmed ${stat(r.mproj)[0]}" title="Médias das vertentes com meta, cada uma limitada a 100%">Realizado ${fmtPct(r.media)} · Projeção ${fmtPct(r.mproj)}</span>`:""}</div></div>
       <div class="mvs">${VERT.map(v=>linha(v,r[v.k])).join("")}</div></div>`}; };
   const lista=[...cods].sort();
   const blocos=lista.map(c=>{ const n=nomeDe[c]||c; const ini=n.split(/\s+/).filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join("").toUpperCase()||"T";
     return bloco(n, c, ini, new Set([c])); }).sort((a,b)=>(b.media??-1)-(a.media??-1));
   const time = (papel!=="vendedor" && lista.length>1) ? bloco(`Time (${lista.length} executivos)`, "soma de todos", "∑", new Set(lista), "team").html : "";
   card.classList.remove("hidden");
-  $("metasDesc").innerHTML = `Período: <b>${esc(P.label)}</b> · muda pelo filtro de Data prevista. Na barra: cheio = realizado (ganhas, 100%); listrado = previsto (em andamento com data prevista no período${state.probs.size?", só as probabilidades filtradas":""}).`;
+  $("metasDesc").innerHTML = `Período: <b>${esc(P.label)}</b> (${P.ks.length} ${P.ks.length>1?"meses":"mês"}; a meta é a soma dos meses) · muda pelo filtro de Data prevista. Na barra: cheio = realizado (ganhas, 100%); listrado = previsto (em andamento com data prevista no período${state.probs.size?", só as probabilidades filtradas":""}).`;
   $("metasBody").innerHTML = lista.length? time + blocos.map((b,i)=>b.html.replace('<span class="av">',`<span class="rank">${blocos.length>1?(i+1)+"º":""}</span><span class="av">`)).join("")
     : `<div class="empty" style="margin:0"><b>Nenhuma meta carregada</b>${papel==="vendedor"?"Sua meta ainda não foi cadastrada.":'Clique em "Carregar metas" para enviar a planilha de metas.'}</div>`;
+}
+
+
+/* ---------- projeções (velocímetros, rosca e pipe 3 meses) ---------- */
+const COR={r:"#E24B4A",a:"#EF9F27",g:"#1D9E75",n:"#888780"};
+function renderProj(){
+  const card=$("projCard");
+  if(!metasOn){ card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const P=periodo(), inP=o=>o.mi!=null && P.ks.includes(keyMi(o.mi));
+  let cods=new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.map(o=>codigoT(o.exec)), ...ganhas.map(o=>codigoT(o.exec))].filter(Boolean));
+  if(papel==="vendedor") cods=new Set(meuT?[meuT]:[]);
+  else if(state.exec!=="__all"){ const c=codigoT(state.exec); cods=new Set(c?[c]:[]); }
+  const meu=o=>cods.has(codigoT(o.exec));
+  const metaDe=(v,ks)=>metas.filter(m=>cods.has(m.codigo_t.toUpperCase()) && ks.includes(String(m.mes).slice(0,7))).reduce((a,m)=>a+Number(m[v.m]||0),0);
+  const prev=rows.filter(o=>meu(o) && inP(o) && pOk0(o));
+  const quem = papel==="vendedor"? "" : state.exec!=="__all"? ` · ${esc(nm(state.exec))}` : (cods.size>1?` · time (${cods.size} executivos)`:"");
+  $("projTit").innerHTML=`Projeção do período · ${esc(P.label)}${quem}`;
+  $("projSub").textContent=`${P.ks.length} ${P.ks.length>1?"meses":"mês"} · meta = soma dos meses filtrados`;
+
+  // velocímetros
+  const MAX=150, pt=(p,r)=>{ const a=Math.PI*(1-Math.min(Math.max(p,0),MAX)/MAX); return [70+r*Math.cos(a),72-r*Math.sin(a)]; };
+  const arc=(p0,p1,c)=>{ const [x0,y0]=pt(p0,52),[x1,y1]=pt(p1,52); return `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A52 52 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${c}" stroke-width="10"/>`; };
+  $("gauges").innerHTML=VERT.map(v=>{
+    const meta=metaDe(v,P.ks), real=ganhas.filter(o=>meu(o)&&inP(o)).reduce((a,o)=>a+o[v.k],0);
+    const pv=prev.reduce((a,o)=>a+o[v.k],0), pond=prev.reduce((a,o)=>a+o[v.k]*((o.p||0)/100),0);
+    if(!meta) return `<div class="gc sm"><h4>${v.nome}</h4><div class="gnone">Sem meta no período</div>
+      <div class="kv"><span>Realizado</span><b>${brl(real)}</b><span>Previsto</span><b>${brl(pv)}</b></div></div>`;
+    const proj=(real+pv)/meta*100, pp=(real+pond)/meta*100, [nx,ny]=pt(proj,44), [px,py]=pt(pp,44);
+    const [sc]=stat(proj), dif=real+pv-meta;
+    return `<div class="gc"><h4><i class="dot d-${v.cls}"></i> ${v.nome}</h4>
+      <svg width="140" height="84" viewBox="0 0 140 84" role="img" aria-label="${v.nome}: projeção ${Math.round(proj)}%, ponderada ${Math.round(pp)}%">
+      ${arc(0,70,COR.r)}${arc(70,100,COR.a)}${arc(100,150,COR.g)}
+      <line x1="70" y1="72" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 3"/>
+      <line x1="70" y1="72" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="var(--ink)" stroke-width="2.5"/><circle cx="70" cy="72" r="4" fill="var(--ink)"/></svg>
+      <div class="gbig">${fmtPct(proj)}</div><div class="gsub">projeção · ponderada ${fmtPct(pp)}</div>
+      <div class="kv"><span>Meta</span><b>${brl(meta)}</b><span>Realizado</span><b>${brl(real)}</b><span>Previsto</span><b>${brl(pv)}</b><span>Ponderado</span><b>${brl(pond)}</b></div>
+      <span class="mst ${sc}" style="display:inline-block;margin-top:6px">${dif>=0?"Folga "+brl(dif):"Falta "+brl(-dif)}</span></div>`;
+  }).join("");
+
+  // rosca: origem do previsto por probabilidade
+  const tot=o=>o.ad+o.im+o.mrr+o.scc, grupos={};
+  prev.forEach(o=>{ const k=pKey(o); grupos[k]=(grupos[k]||0)+tot(o); });
+  const total=Object.values(grupos).reduce((a,b)=>a+b,0);
+  const corP=k=>k==="s"?COR.n : +k>=60?COR.g : +k>=30?COR.a : COR.r;
+  const ks=Object.keys(grupos).sort((a,b)=>a==="s"?1:b==="s"?-1:b-a);
+  if(!total){ $("donut").innerHTML=`<div class="gnone" style="padding:24px 0">Nada previsto no período${state.probs.size?" com as probabilidades filtradas":""}.</div>`; }
+  else {
+    const C=2*Math.PI*44; let off=0;
+    const segs=ks.map(k=>{ const len=grupos[k]/total*C; const el=`<circle cx="60" cy="60" r="44" fill="none" stroke="${corP(k)}" stroke-width="16" stroke-dasharray="${len.toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}" transform="rotate(-90 60 60)"/>`; off+=len; return el; }).join("");
+    const madura=ks.filter(k=>k!=="s"&&+k>=60).reduce((a,k)=>a+grupos[k],0)/total;
+    $("donut").innerHTML=`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="Origem do previsto por probabilidade">
+        <circle cx="60" cy="60" r="44" fill="none" stroke="var(--line)" stroke-width="16"/>${segs}
+        <text x="60" y="57" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--ink)">${brl(total)}</text>
+        <text x="60" y="73" text-anchor="middle" style="font-size:11px;fill:var(--muted)">previsto</text></svg>
+      <div class="dleg">${ks.map(k=>`<span><i style="background:${corP(k)}"></i>${k==="s"?"Sem probabilidade":k+"%"}: <b>${Math.round(grupos[k]/total*100)}%</b> · ${brl(grupos[k])}</span>`).join("")}
+        <span class="mst ${madura>=.5?"ok":"at"}" style="align-self:flex-start;margin-top:4px">${madura>=.5?"Previsto maduro (60%+ é a maior parte)":"Mês depende de contas imaturas"}</span></div></div>`;
+  }
+
+  // pipe 3 meses
+  const M3=mesesPipe(P), v=VERT.find(x=>x.k===state.pv)||VERT[0];
+  const dados=M3.map(k=>({k, meta:metaDe(v,[k]), pipe:rows.filter(o=>meu(o) && o.mi!=null && keyMi(o.mi)===k).reduce((a,o)=>a+o[v.k],0)}));
+  const sm=dados.reduce((a,d)=>a+d.meta,0), sp=dados.reduce((a,d)=>a+d.pipe,0), cob=sm? sp/sm : null;
+  const cc=x=>x==null?"sm": x>=3?"ok": x>=2?"at":"rk";
+  $("pipeTit").textContent=`Projeção do pipe · ${rotMes(M3[0])} a ${rotMes(M3[2])}`;
+  $("pipeCob").className="mst "+cc(cob); $("pipeCob").textContent= cob==null? "Sem meta" : "Cobertura "+cob.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+"x";
+  $("pipeChips").innerHTML=VERT.map(x=>`<button type="button" class="chip ${x.k===v.k?"on":""}" data-pv="${x.k}">${x.nome}</button>`).join("");
+  const mx=Math.max(1,...dados.map(d=>Math.max(d.meta,d.pipe))), h=100;
+  $("pipeBars").innerHTML=dados.map((d,i)=>{ const x=70+i*170, hm=d.meta/mx*h, hp=d.pipe/mx*h, c=d.meta? d.pipe/d.meta : null;
+    return `<rect x="${x}" y="${115-hm}" width="34" height="${Math.max(hm,1)}" rx="3" fill="var(--tt)"/><rect x="${x+40}" y="${115-hp}" width="34" height="${Math.max(hp,1)}" rx="3" fill="var(--c-${v.cls})"/>
+      <text x="${x+17}" y="${Math.max(11,109-hm)}" text-anchor="middle" style="font-size:11px;fill:var(--muted)">${brl(d.meta).replace("R$ ","")}</text>
+      <text x="${x+57}" y="${Math.max(11,109-hp)}" text-anchor="middle" style="font-size:11px;fill:var(--ink);font-weight:600">${brl(d.pipe).replace("R$ ","")}</text>
+      <text x="${x+37}" y="133" text-anchor="middle" style="font-size:12px;fill:var(--muted)">${rotMes(d.k)}</text>
+      <text x="${x+37}" y="148" text-anchor="middle" style="font-size:11.5px;font-weight:700;fill:${c==null?COR.n:c>=3?COR.g:c>=2?COR.a:COR.r}">${c==null?"sem meta":c.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+"x"}</text>`; }).join("")+
+    `<line x1="40" y1="115" x2="520" y2="115" stroke="var(--line)"/>`;
 }
 
 /* carga de metas */
@@ -588,6 +675,7 @@ document.addEventListener("change",e=>{
   render();
 });
 document.addEventListener("click",e=>{
+  const pv=e.target.closest("[data-pv]"); if(pv){ state.pv=pv.dataset.pv; renderProj(); return; }
   const dt=e.target.closest("[data-dt]"); if(dt){ state.dtOpen=!state.dtOpen; render(); return; }
   const ex=e.target.closest("[data-exp]"); if(ex){ const k=ex.dataset.exp; state.exp.has(k)?state.exp.delete(k):state.exp.add(k); render(); return; }
   if(state.dtOpen && !e.target.closest(".dpop")){ state.dtOpen=false; render(); }
