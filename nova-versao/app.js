@@ -57,7 +57,7 @@ function toView(r){
     mi: d? d.getFullYear()*12+d.getMonth() : null, exec:r.executivo, cargaEm:r.carga_em,
     saas:Number(r.valor_saas)||0, sms:Number(r.valor_sms)||0, ad:Number(r.valor_cdu)||0, im:Number(r.valor_servicos)||0, scc:Number(r.valor_scc)||0 };
   o.mrr = o.saas + o.sms;
-  o.fc = o.mi===CUR && o.p!=null && o.p>=60;
+  o.fc = o.mi===CUR;   // forecast = data prevista no mês atual (a probabilidade é filtrada à parte)
   o.pp = o.mi!=null && o.mi>=CUR && o.mi<=CUR+2;
   return o;
 }
@@ -315,7 +315,7 @@ function htmlDatas(t){
 
 /* ---------- painel ---------- */
 const HZ = {
-  fc:{name:"Forecast", rule:"Mês atual, probabilidade de 60% ou mais", f:o=>o.fc},
+  fc:{name:"Forecast", rule:"Data prevista no mês atual", f:o=>o.fc},
   pp:{name:"Pipeline", rule:"Mês atual e os dois seguintes", f:o=>o.pp},
   tt:{name:"Total", rule:"Todas as oportunidades em andamento", f:()=>true}
 };
@@ -396,7 +396,6 @@ function render(){
 
   // alertas
   const B=cur; const al=[], grp=a=>{const m={};a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});return Object.entries(m).map(([k,v])=>`${esc(title(k))} (${v.length})`).join(", ")};
-  const a1=B.filter(o=>o.mi===CUR&&!o.fc); if(a1.length) al.push(["Fecham este mês, mas estão fora do forecast (abaixo de 60%)", `${grp(a1)} · ${brl(sum(a1,"ad")+sum(a1,"im"))} + RR ${brl(sum(a1,"mrr"))} + SCC ${brl(sum(a1,"scc"))}`]);
   const a2=B.filter(o=>/^\s*[67]\./.test(o.etapa)&&o.p!=null&&o.p<=30); if(a2.length) al.push(["Negociação ou fechamento com probabilidade de 30% ou menos", grp(a2)]);
   const a3=B.filter(o=>o.p==null); if(a3.length) al.push(["Sem probabilidade preenchida", grp(a3)]);
   const a4=B.filter(o=>o.mi!=null&&o.mi<CUR); if(a4.length) al.push(["Data prevista já vencida", grp(a4)]);
@@ -464,7 +463,7 @@ function renderMetas(){
     VERT.forEach(v=>{
       const meta = metas.filter(m=>cs.has(m.codigo_t.toUpperCase()) && P.ks.includes(String(m.mes).slice(0,7))).reduce((a,m)=>a+Number(m[v.m]||0),0);
       const real = ganhas.filter(o=>cs.has(codigoT(o.exec)) && inP(o)).reduce((a,o)=>a+o[v.k],0);
-      const fc   = rows.filter(o=>cs.has(codigoT(o.exec)) && o.fc && inP(o)).reduce((a,o)=>a+o[v.k],0);
+      const fc   = rows.filter(o=>cs.has(codigoT(o.exec)) && inP(o) && pOk0(o)).reduce((a,o)=>a+o[v.k],0);
       const meta3= metas.filter(m=>cs.has(m.codigo_t.toUpperCase()) && P3.includes(String(m.mes).slice(0,7))).reduce((a,m)=>a+Number(m[v.m]||0),0);
       const pipe3= rows.filter(o=>cs.has(codigoT(o.exec)) && o.pp).reduce((a,o)=>a+o[v.k],0);
       r[v.k]={meta,real,fc,at:pct(real,meta),proj:pct(real+fc,meta),gap:Math.max(0,meta-real-fc),cob: meta3>0? pipe3/meta3 : null};
@@ -475,10 +474,10 @@ function renderMetas(){
   const linha = (v,x) => { const [sc,st]=stat(x.proj), a=Math.min(100,x.at||0), f=Math.max(0,Math.min(100,(x.proj||0))-a);
     return `<div class="mv">
       <div class="mvl"><i class="dot d-${v.cls}"></i><b>${v.nome}</b></div>
-      <div class="mvb"><div class="mbar" title="Realizado ${full(x.real)} · Forecast ${full(x.fc)} · Meta ${full(x.meta)}"><i class="mr ${sc}" style="width:${a}%"></i><i class="mf" style="width:${f}%"></i></div>
-        <div class="mvt">${x.meta? `<b>${fmtPct(x.at)}</b> realizado · <span>com forecast ${fmtPct(x.proj)}</span>` : `<span>sem meta no período</span>`}</div></div>
+      <div class="mvb"><div class="mbar" title="Realizado ${full(x.real)} · Previsto no período ${full(x.fc)} · Meta ${full(x.meta)}"><i class="mr ${sc}" style="width:${a}%"></i><i class="mf" style="width:${f}%"></i></div>
+        <div class="mvt">${x.meta? `<b>${fmtPct(x.at)}</b> realizado · <span>com previsto ${fmtPct(x.proj)}</span>` : `<span>sem meta no período${x.real+x.fc?` · realizado ${brl(x.real)} · previsto ${brl(x.fc)}`:""}</span>`}</div></div>
       <div class="mvn"><span class="mst ${sc}">${st}</span>
-        <small>${brl(x.real)} de ${brl(x.meta)}${x.meta&&x.gap>0?` · falta ${brl(x.gap)}`:""}${x.cob!=null?` · pipe 3m ${x.cob.toLocaleString("pt-BR",{maximumFractionDigits:1})}x`:""}</small></div>
+        <small>${brl(x.real)} de ${brl(x.meta)}${x.meta&&x.gap>0?` · falta ${brl(x.gap)}`:""}${x.fc?` · previsto ${brl(x.fc)}`:""}${x.cob!=null?` · pipe 3m ${x.cob.toLocaleString("pt-BR",{maximumFractionDigits:1})}x`:""}</small></div>
     </div>`; };
   const bloco = (label,sub,avatar,cs,cls) => { const r=calc(cs);
     return {media:r.media, html:`<div class="mrow ${cls||""}"><div class="xwho"><span class="av">${avatar}</span><div><b>${esc(label)}</b><small>${sub}${r.nG?` · ${r.nG} ganha(s) no período`:""}</small>
@@ -489,7 +488,7 @@ function renderMetas(){
     return bloco(n, c, ini, new Set([c])); }).sort((a,b)=>(b.media??-1)-(a.media??-1));
   const time = (papel!=="vendedor" && lista.length>1) ? bloco(`Time (${lista.length} executivos)`, "soma de todos", "∑", new Set(lista), "team").html : "";
   card.classList.remove("hidden");
-  $("metasDesc").innerHTML = `Período: <b>${esc(P.label)}</b> · muda pelo filtro de Data prevista. Realizado = oportunidades com 100%. A barra clara mostra o quanto o forecast ainda soma.`;
+  $("metasDesc").innerHTML = `Período: <b>${esc(P.label)}</b> · muda pelo filtro de Data prevista. Na barra: cheio = realizado (ganhas, 100%); listrado = previsto (em andamento com data prevista no período${state.probs.size?", só as probabilidades filtradas":""}).`;
   $("metasBody").innerHTML = lista.length? time + blocos.map((b,i)=>b.html.replace('<span class="av">',`<span class="rank">${blocos.length>1?(i+1)+"º":""}</span><span class="av">`)).join("")
     : `<div class="empty" style="margin:0"><b>Nenhuma meta carregada</b>${papel==="vendedor"?"Sua meta ainda não foi cadastrada.":'Clique em "Carregar metas" para enviar a planilha de metas.'}</div>`;
 }
