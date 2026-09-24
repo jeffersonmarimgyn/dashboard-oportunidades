@@ -282,9 +282,10 @@ function render(){
   const pvals=[...new Set(rows.map(pKey))].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b);
   const hzAtivo = state.hz!=="tt";
   $("filters").innerHTML = `<span class="fl">Probabilidade</span>
-    <button class="chip ${state.probs.size?"":"on"}" data-p="__all">Todas</button>`+
-    pvals.map(v=>`<button class="chip ${state.probs.has(v)?"on":""}" data-p="${v}">${v==="s"?"Sem probabilidade":v+"%"}</button>`).join("")+
-    (hzAtivo||state.probs.size? `<span class="fsum">Mostrando: <b>${hzAtivo?HZ[state.hz].name:"Todas"}</b>${state.probs.size?` · ${[...state.probs].map(v=>v==="s"?"sem prob.":v+"%").join(", ")}`:""}</span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
+    <button class="chip all ${state.probs.size?"":"on"}" data-p="__all" aria-pressed="${!state.probs.size}">Todas</button>`+
+    pvals.map(v=>`<button class="chip ${state.probs.has(v)?"on":""}" data-p="${v}" aria-pressed="${state.probs.has(v)}">${v==="s"?"Sem probabilidade":v+"%"}</button>`).join("")+
+    `<span class="pcount">${state.probs.size? `<b>${state.probs.size}</b> de ${pvals.length} selecionadas` : `todas as ${pvals.length} faixas`}</span>`+
+    (hzAtivo||state.probs.size? `<span class="fsum">Horizonte: <b>${hzAtivo?HZ[state.hz].name:"Total"}</b> · Probabilidade: <b>${state.probs.size?[...state.probs].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b).map(v=>v==="s"?"sem prob.":v+"%").join(", "):"todas"}</b></span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
 
   // quadro por executivo (respeita horizonte e probabilidade)
   const vis=base.filter(HZ[state.hz].f);

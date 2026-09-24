@@ -206,8 +206,13 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 /* filtros */
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 16px}
 .filters .fl{font-size:13px;font-weight:650;color:var(--muted);margin-right:2px}
-.chip{font:inherit;font-size:13px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer}
-.chip.on{background:var(--band);border-color:var(--band);color:#fff;font-weight:600}
+.chip{font:inherit;font-size:13px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .12s,border-color .12s}
+.chip:hover{border-color:#2F7BEA;color:var(--ink)}
+.chip.on{background:#2F7BEA;border-color:#2F7BEA;color:#fff;font-weight:650;box-shadow:0 2px 8px rgba(47,123,234,.35)}
+.chip.on::before{content:"✓";font-weight:800}
+.chip.all.on{background:#0E9F6E;border-color:#0E9F6E;box-shadow:0 2px 8px rgba(14,159,110,.35)}
+.pcount{font-size:12.5px;color:var(--muted);margin-left:4px}
+.pcount b{color:var(--ink)}
 .chip.clear{border-color:var(--warn);color:var(--warn);background:transparent}
 .fsum{font-size:13px;color:var(--muted);margin-left:8px}
 .fsum b{color:var(--ink)}
