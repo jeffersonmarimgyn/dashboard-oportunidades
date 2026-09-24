@@ -284,6 +284,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .umsg{font-size:13px;min-height:1.2em;margin-bottom:8px}.umsg.ok{color:var(--won)}.umsg.err{color:var(--warn)}
 #uTbl td{vertical-align:middle}#uTbl .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}#uTbl .acts button{font-size:12.5px;padding:5px 9px}
 .pp{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px}.pp.dono{background:var(--band);color:#fff}.pp.usuario{background:var(--pp-soft);color:var(--pp)}.pp.vendedor{background:var(--fc-soft);color:var(--fct)}.pp.nenhum{background:var(--warn-soft);color:var(--warn)}
+.ucods{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.ucods .chip{font-size:12px;padding:4px 10px}.uhint{font-size:11.5px;color:var(--muted);margin-right:4px}.uadd{font:inherit;font-size:12px;padding:4px 8px;border:1px dashed var(--line);border-radius:20px;background:transparent;color:var(--ink)}
 @media (max-width:860px){.uform{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -422,7 +423,8 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
       <label>Senha provisória<div style="display:flex;gap:6px"><input id="uSenha" autocomplete="off" style="flex:1;min-width:0"><button type="button" id="uGerar" title="Gerar senha">Gerar</button></div></label>
       <button type="submit" class="primary" id="uCriar">Criar usuário</button>
     </form>
-    <div style="font-size:12px;color:var(--muted);margin:-4px 0 8px">Vendedor: vê só o próprio código T. Gestor: vê tudo, sobe planilhas e metas. Dono: tudo, inclusive esta tela.</div>
+    <div id="uCods" class="hidden" style="margin:-2px 0 10px"></div>
+    <div style="font-size:12px;color:var(--muted);margin:-4px 0 8px">Vendedor: vê só o próprio código T. Gestor: vê os executivos marcados (nenhum marcado = todos), sobe planilhas e metas deles. Dono: tudo, inclusive esta tela.</div>
     <div id="uMsg" class="umsg" role="status"></div>
     <div class="tbl"><table id="uTbl"></table></div>
   </div>

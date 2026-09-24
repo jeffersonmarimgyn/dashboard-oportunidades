@@ -13,6 +13,8 @@ const TODAY = new Date();
 const CUR = TODAY.getFullYear()*12 + TODAY.getMonth();
 const $ = id => document.getElementById(id);
 
+let meusCodigos = [];
+const permitidos = () => papel==="vendedor"? (meuT?[meuT]:[]) : (papel==="usuario" && meusCodigos.length? meusCodigos : null);  // null = todos
 let rows = [], ganhas = [], metas = [], metasOn = true, ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
 const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
 const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
@@ -83,6 +85,7 @@ async function entrar(){
   $("login").classList.add("hidden"); $("app").classList.remove("hidden");
   const { data } = await db.rpc("meu_perfil");
   papel = (data && data.papel) || "usuario"; meuT = data && data.codigo_t || null;
+  meusCodigos = (data && data.codigos_t || []).map(c=>String(c).toUpperCase());
   const vend = papel==="vendedor";
   $("limparBox").classList.toggle("hidden", papel!=="dono");
   $("btnHist").classList.toggle("hidden", vend);
@@ -186,8 +189,9 @@ $("file").addEventListener("change", async e=>{
     linhas.forEach(l=>{ if(WON.test(l.situacao)) l.probabilidade=100; delete l.situacao; });
     // vendedor: só as oportunidades do próprio código T
     let ignoradas=0;
-    if(papel==="vendedor"){ const antes=linhas.length; linhas=linhas.filter(l=>codigoT(l.executivo)===meuT); ignoradas=antes-linhas.length;
-      if(!linhas.length) throw new Error(`Nenhuma oportunidade do seu código (${meuT}) nestas planilhas.`); }
+    const perm=permitidos();
+    if(perm){ const antes=linhas.length; linhas=linhas.filter(l=>perm.includes(codigoT(l.executivo))); ignoradas=antes-linhas.length;
+      if(!linhas.length) throw new Error(`Nenhuma oportunidade dos seus executivos (${perm.join(", ")}) nestas planilhas.`); }
     // mesma oportunidade em mais de um arquivo: vale a última
     const porCodigo=new Map(); linhas.forEach(l=>porCodigo.set(l.codigo,l)); const dup=linhas.length-porCodigo.size; linhas=[...porCodigo.values()];
     const execs=[...new Set(linhas.map(l=>l.executivo))].sort();
@@ -195,7 +199,7 @@ $("file").addEventListener("change", async e=>{
     pendente = { arquivos:files.map(f=>f.name), linhas, execs };
     $("cargaBody").innerHTML =
       `<ul class="files">${porArquivo.map(a=>`<li>${esc(a.nome)}: ${a.qtd} oportunidades</li>`).join("")}</ul>`+
-      (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. Você só pode atualizar a carteira do código ${meuT}.</p>`:"")+
+      (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. Você só pode atualizar a carteira de: ${permitidos().join(", ")}.</p>`:"")+
       (nDesc?`<p style="font-size:13px;color:var(--muted)">${nDesc} oportunidade(s) com situação descartada ou perdida foram ignoradas.</p>`:"")+
       (nGanhas?`<p style="font-size:13px;color:var(--muted)">${nGanhas} oportunidade(s) com 100% serão registradas como <b>ganhas</b> e passam a contar no Realizado das metas.</p>`:"")+
       (semScc.length?`<p style="font-size:13px;color:var(--muted)">Sem a coluna "Valor Serviços Recorrentes" (SCC): ${semScc.map(esc).join(", ")}. O SCC dessas oportunidades fica zerado.</p>`:"")+
@@ -658,7 +662,9 @@ $("fileMetas").addEventListener("change", async e=>{
       if(!mes){ erros.push(`linha ${i+2}: mês inválido (${esc(r["Mês"]??"vazio")})`); return; }
       mapa.set(c+"|"+mes,{codigo_t:c,mes,meta_adesao:num(r["Meta Adesão"]),meta_implantacao:num(r["Meta Implantação"]),meta_rr:num(r["Meta RR"]),meta_scc:num(r["Meta SCC"])});
     });
-    const linhas=[...mapa.values()];
+    let linhas=[...mapa.values()]; const permM=permitidos(); let foraM=[];
+    if(permM){ foraM=[...new Set(linhas.filter(l=>!permM.includes(l.codigo_t)).map(l=>l.codigo_t))]; linhas=linhas.filter(l=>permM.includes(l.codigo_t)); }
+    if(!linhas.length && foraM.length) throw new Error(`As metas deste arquivo são de executivos que você não acompanha: ${foraM.join(", ")}.`);
     if(!linhas.length) throw new Error("Nenhuma linha válida na planilha de metas."+(erros.length?" "+erros.slice(0,3).join("; "):""));
     metasPend=linhas;
     const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c&&!nomeDe[c]) nomeDe[c]=nm(o.exec); });
@@ -666,6 +672,7 @@ $("fileMetas").addEventListener("change", async e=>{
     const mesTxt=k=>{ const [y,m]=k.split("-"); return MES[+m-1]+"/"+y; };
     $("metasConfBody").innerHTML=
       `<p style="font-size:13.5px;margin:0 0 10px">${esc(f.name)}: <b>${linhas.length}</b> meta(s) de <b>${Object.keys(porCod).length}</b> vendedor(es). As metas destes vendedores e meses serão substituídas; as demais não mudam.</p>`+
+      (foraM.length?`<p style="font-size:13px;color:var(--warn)">Ignoradas (fora dos executivos que você acompanha): ${foraM.join(", ")}.</p>`:"")+
       (faltam.length?`<p style="font-size:13px;color:var(--muted)">Colunas ausentes (ficam zeradas): ${faltam.join(", ")}.</p>`:"")+
       (erros.length?`<p style="font-size:13px;color:var(--warn)">${erros.length} linha(s) ignorada(s): ${erros.slice(0,5).join("; ")}${erros.length>5?"…":""}</p>`:"")+
       `<div class="tbl"><table><thead><tr><th>Código T</th><th>Nome</th><th>Meses</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th><th class="n h-scc">SCC</th></tr></thead><tbody>`+
@@ -686,7 +693,20 @@ $("metasConfirmar").addEventListener("click", async ()=>{
 
 
 /* ---------- usuários (somente dono, via Edge Function "usuarios") ---------- */
-let usuarios=[], uEdit=null;
+let usuarios=[], uEdit=null, uSel=new Set(), eSel=new Set();
+function codigosConhecidos(){
+  const m=new Map();
+  rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c && !m.has(c)) m.set(c,nm(o.exec)); });
+  metas.forEach(x=>{ const c=x.codigo_t.toUpperCase(); if(!m.has(c)) m.set(c,""); });
+  usuarios.forEach(u=>{ if(u.papel==="vendedor" && u.codigo_t){ const c=u.codigo_t.toUpperCase(); if(!m.get(c)) m.set(c,u.nome||""); } });
+  return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+}
+function chipsCodigos(sel, alvo){
+  const conh=codigosConhecidos(); [...sel].forEach(c=>{ if(!conh.some(x=>x[0]===c)) conh.push([c,""]); });
+  return `<div class="ucods"><span class="uhint">${sel.size? sel.size+" selecionado(s)" : "Nenhum marcado = vê todos os executivos"}</span>`+
+    conh.map(([c,n])=>`<button type="button" class="chip ${sel.has(c)?"on":""}" data-cod="${c}" data-alvo="${alvo}">${c}${n?" · "+esc(n):""}</button>`).join("")+
+    `<input class="uadd" data-alvo="${alvo}" placeholder="+ código T" size="9"></div>`;
+}
 const PAPEIS={dono:"Dono",usuario:"Gestor",vendedor:"Vendedor"};
 async function chamarUsuarios(body){
   const { data, error } = await db.functions.invoke("usuarios",{ body });
@@ -700,7 +720,8 @@ const uMsg=(t,ok)=>{ const m=$("uMsg"); m.textContent=t; m.className="umsg "+(ok
 const loginDe=u=> u.papel==="vendedor" && u.codigo_t ? u.codigo_t : u.email;
 const quando=d=> d? new Date(d).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}) : "nunca";
 function senhaAleatoria(){ const c="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"; let s=""; const a=new Uint32Array(10); crypto.getRandomValues(a); a.forEach(n=>s+=c[n%c.length]); return s.slice(0,8)+"@"+s.slice(8); }
-function ajustaForm(){ const v=$("uPapel").value==="vendedor"; $("uLoginL").firstChild.textContent=v?"Código T":"E-mail"; $("uLogin").placeholder=v?"T12345":"nome@totvs.com.br"; }
+function ajustaForm(){ const g=$("uPapel").value==="usuario"; $("uCods").classList.toggle("hidden",!g); if(g) $("uCods").innerHTML=`<b style="font-size:12.5px;color:var(--muted)">Executivos que este gestor acompanha</b>`+chipsCodigos(uSel,"n");
+  const v=$("uPapel").value==="vendedor"; $("uLoginL").firstChild.textContent=v?"Código T":"E-mail"; $("uLogin").placeholder=v?"T12345":"nome@totvs.com.br"; }
 async function abrirUsuarios(){ $("dlgUsers").showModal(); ajustaForm(); if(!$("uSenha").value) $("uSenha").value=senhaAleatoria(); await carregarUsuarios(); }
 async function carregarUsuarios(){
   $("uTbl").innerHTML=`<tr><td style="color:var(--muted)">Carregando…</td></tr>`;
@@ -713,11 +734,11 @@ function renderUsuarios(eu){
     usuarios.map((u,i)=>{ const ed=uEdit===i, eu2=(u.email||"").toLowerCase()===eu;
       if(ed) return `<tr><td><input id="eNome" value="${esc(u.nome||"")}"></td><td>${esc(loginDe(u))}</td>
         <td><select id="ePapel">${Object.entries(PAPEIS).map(([k,t])=>`<option value="${k}" ${u.papel===k?"selected":""}>${t}</option>`).join("")}</select>
-          <input id="eT" placeholder="Código T" value="${esc(u.codigo_t||"")}" style="margin-top:4px;width:110px"></td>
-        <td colspan="2" style="color:var(--muted);font-size:12px">Para vendedor, informe o código T.</td>
+          <input id="eT" placeholder="Código T" value="${esc(u.codigo_t||"")}" style="margin-top:4px;width:110px;${u.papel==="vendedor"?"":"display:none"}"></td>
+        <td colspan="2" id="eCodsCell">${u.papel==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T. Para gestor, escolha os executivos.</span>'}</td>
         <td><div class="acts"><button data-u="salvar" data-i="${i}" class="primary">Salvar</button><button data-u="cancelar">Cancelar</button></div></td></tr>`;
       return `<tr><td>${esc(u.nome||"—")}${eu2?' <span class="badge">você</span>':""}</td><td>${esc(loginDe(u))}${u.tem_login?"":' <span class="badge undo">sem login</span>'}</td>
-        <td><span class="pp ${u.papel||"nenhum"}">${u.papel?PAPEIS[u.papel]:"Sem acesso"}</span></td><td>${quando(u.ultimo_acesso)}</td>
+        <td><span class="pp ${u.papel||"nenhum"}">${u.papel?PAPEIS[u.papel]:"Sem acesso"}</span>${u.papel==="usuario"?`<div class="uhint">${(u.codigos_t||[]).length? (u.codigos_t||[]).join(", ") : "todos os executivos"}</div>`:""}</td><td>${quando(u.ultimo_acesso)}</td>
         <td>${u.tem_login?(u.senha_definida?"definida":'<span style="color:var(--fct)">provisória</span>'):"—"}</td>
         <td><div class="acts">${u.papel||!u.tem_login?`<button data-u="editar" data-i="${i}">Editar</button>`:`<button data-u="liberar" data-i="${i}">Dar acesso</button>`}
           ${u.tem_login?`<button data-u="senha" data-i="${i}">Redefinir senha</button>`:`<button data-u="criarlogin" data-i="${i}">Criar login</button>`}
@@ -733,20 +754,28 @@ $("uForm").addEventListener("submit", async e=>{
   if(!login){ uMsg(papelN==="vendedor"?"Informe o código T.":"Informe o e-mail.",false); return; }
   if(senha.length<8){ uMsg("A senha provisória precisa ter pelo menos 8 caracteres.",false); return; }
   const b=$("uCriar"); b.disabled=true; b.textContent="Criando…";
-  try{ await chamarUsuarios({action:"criar", papel:papelN, nome:$("uNome").value.trim(), senha, email:papelN==="vendedor"?null:login, codigo_t:papelN==="vendedor"?login:null});
+  try{ await chamarUsuarios({action:"criar", papel:papelN, nome:$("uNome").value.trim(), senha, codigos_t:[...uSel], email:papelN==="vendedor"?null:login, codigo_t:papelN==="vendedor"?login:null});
     uMsg(`Usuário criado. Login: ${papelN==="vendedor"?login.toUpperCase().replace(/^(\d)/,"T$1"):login} · senha provisória: ${senha}`,true);
-    $("uNome").value=""; $("uLogin").value=""; $("uSenha").value=senhaAleatoria(); await carregarUsuarios();
+    $("uNome").value=""; $("uLogin").value=""; $("uSenha").value=senhaAleatoria(); uSel=new Set(); ajustaForm(); await carregarUsuarios();
   }catch(err){ uMsg(err.message,false); }
   b.disabled=false; b.textContent="Criar usuário";
 });
+// chips de código T (formulário "n" e edição "e")
+const togCod=(alvo,c)=>{ const S=alvo==="n"?uSel:eSel; S.has(c)?S.delete(c):S.add(c); };
+function redesenhaCods(alvo){ if(alvo==="n") ajustaForm(); else { const cell=$("eCodsCell"); if(cell) cell.innerHTML=chipsCodigos(eSel,"e"); } }
+$("dlgUsers").addEventListener("click", e=>{ const b=e.target.closest("[data-cod]"); if(!b) return; e.preventDefault(); togCod(b.dataset.alvo,b.dataset.cod); redesenhaCods(b.dataset.alvo); });
+$("dlgUsers").addEventListener("keydown", e=>{ const i=e.target.closest&&e.target.closest(".uadd"); if(!i||e.key!=="Enter") return; e.preventDefault();
+  let c=i.value.trim().toUpperCase(); if(/^\d+$/.test(c)) c="T"+c; if(!/^T\d+$/.test(c)){ uMsg("Código T inválido (ex.: T12345).",false); return; }
+  (i.dataset.alvo==="n"?uSel:eSel).add(c); redesenhaCods(i.dataset.alvo); });
+$("dlgUsers").addEventListener("change", e=>{ if(e.target.id==="ePapel"){ $("eT").style.display = e.target.value==="vendedor"? "" : "none"; const cell=$("eCodsCell"); if(cell) cell.innerHTML= e.target.value==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T.</span>'; } });
 $("uTbl").addEventListener("click", async e=>{
   const bt=e.target.closest("[data-u]"); if(!bt) return; const i=+bt.dataset.i, u=usuarios[i], acao=bt.dataset.u, eu=$("uTbl").dataset.eu;
   try{
-    if(acao==="editar"||acao==="liberar"){ uEdit=i; renderUsuarios(eu); return; }
+    if(acao==="editar"||acao==="liberar"){ uEdit=i; eSel=new Set((u.codigos_t||[]).map(c=>c.toUpperCase())); renderUsuarios(eu); return; }
     if(acao==="criarlogin"){ $("uPapel").value=u.papel||"usuario"; ajustaForm(); $("uNome").value=u.nome||""; $("uLogin").value=u.papel==="vendedor"&&u.codigo_t?u.codigo_t:u.email; $("uSenha").value=senhaAleatoria();
       uMsg("Confira os dados acima e clique em Criar usuário.",true); $("uCriar").focus(); return; }
     if(acao==="cancelar"){ uEdit=null; renderUsuarios(eu); return; }
-    if(acao==="salvar"){ await chamarUsuarios({action:"atualizar", email:u.email, papel:$("ePapel").value, codigo_t:$("eT").value.trim(), nome:$("eNome").value.trim()});
+    if(acao==="salvar"){ await chamarUsuarios({action:"atualizar", email:u.email, papel:$("ePapel").value, codigo_t:$("eT").value.trim(), nome:$("eNome").value.trim(), codigos_t:[...eSel]});
       uEdit=null; uMsg("Permissão atualizada.",true); await carregarUsuarios(); return; }
     if(acao==="senha"){ const nova=prompt(`Nova senha provisória para ${loginDe(u)} (mínimo 8 caracteres):`, senhaAleatoria()); if(!nova) return;
       await chamarUsuarios({action:"redefinir_senha", email:u.email, senha:nova}); uMsg(`Senha redefinida para ${loginDe(u)}: ${nova} (a pessoa troca no próximo acesso).`,true); await carregarUsuarios(); return; }
