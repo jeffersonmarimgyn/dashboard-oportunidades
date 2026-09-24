@@ -3,8 +3,8 @@ const CFG = window.APP_CONFIG || {};
 const db = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY);
 
 const REQUIRED = ["Código","Nome da conta","Tipo de oportunidade","Etapa","Probabilidade","Data prevista (dias)","Responsável","Valor SAAS","Valor CDU/Adesão","Valor SMS","Valor Serviços Não Recorrentes"];
-const OPCIONAIS = ["Descrição","Valor Serviços Recorrentes"];
-const ALIAS = { "valor scc":"Valor Serviços Recorrentes", "scc":"Valor Serviços Recorrentes", "valor saas":"Valor SAAS" };
+const OPCIONAIS = ["Descrição","Valor Serviços Recorrentes","Situação"];
+const ALIAS = { "status":"Situação", "valor scc":"Valor Serviços Recorrentes", "scc":"Valor Serviços Recorrentes", "valor saas":"Valor SAAS" };
 const normH = s => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\bde\b/g," ").replace(/[^a-z0-9%()/]+/g," ").replace(/\s+/g," ").trim();
 const CANON = {}; REQUIRED.concat(OPCIONAIS).forEach(c=>CANON[normH(c)]=c); Object.entries(ALIAS).forEach(([k,v])=>CANON[normH(k)]=v);
 const canonRow = r => { const o={}; for(const k in r){ const c=CANON[normH(k)]||k; if(!(c in o) || o[c]==null) o[c]=r[k]; } return o; };
@@ -13,10 +13,10 @@ const TODAY = new Date();
 const CUR = TODAY.getFullYear()*12 + TODAY.getMonth();
 const $ = id => document.getElementById(id);
 
-let rows = [], ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
+let rows = [], ganhas = [], metas = [], metasOn = true, ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
 const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
 const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
-let state = { hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
+let state = { sit:"and", pv:"ad", hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
 const pKey = o => o.p==null? "s" : String(o.p);
 const pOk0 = o => !state.probs.size || state.probs.has(pKey(o));
 /* filtro de data prevista: ano > trimestre > mês */
@@ -57,7 +57,7 @@ function toView(r){
     mi: d? d.getFullYear()*12+d.getMonth() : null, exec:r.executivo, cargaEm:r.carga_em,
     saas:Number(r.valor_saas)||0, sms:Number(r.valor_sms)||0, ad:Number(r.valor_cdu)||0, im:Number(r.valor_servicos)||0, scc:Number(r.valor_scc)||0 };
   o.mrr = o.saas + o.sms;
-  o.fc = o.mi===CUR && o.p!=null && o.p>=60;
+  o.fc = o.mi===CUR;   // forecast = data prevista no mês atual (a probabilidade é filtrada à parte)
   o.pp = o.mi!=null && o.mi>=CUR && o.mi<=CUR+2;
   return o;
 }
@@ -67,7 +67,8 @@ function fromSheet(r){
     conta:String(r["Nome da conta"]||"").trim()||"Sem conta", tipo:r["Tipo de oportunidade"]||null, etapa:r["Etapa"]? String(r["Etapa"]).trim():null,
     probabilidade:prob(r["Probabilidade"]), data_prevista:iso(parseDate(r["Data prevista (dias)"])),
     executivo:String(r["Responsável"]||"").trim()||"Sem responsável",
-    valor_saas:num(r["Valor SAAS"]), valor_cdu:num(r["Valor CDU/Adesão"]), valor_sms:num(r["Valor SMS"]), valor_servicos:num(r["Valor Serviços Não Recorrentes"]), valor_scc:num(r["Valor Serviços Recorrentes"]) };
+    valor_saas:num(r["Valor SAAS"]), valor_cdu:num(r["Valor CDU/Adesão"]), valor_sms:num(r["Valor SMS"]), valor_servicos:num(r["Valor Serviços Não Recorrentes"]), valor_scc:num(r["Valor Serviços Recorrentes"]),
+    situacao: normH(r["Situação"]||"").toUpperCase() };
 }
 
 /* ---------- autenticação ---------- */
@@ -85,6 +86,8 @@ async function entrar(){
   const vend = papel==="vendedor";
   $("limparBox").classList.toggle("hidden", papel!=="dono");
   $("btnHist").classList.toggle("hidden", vend);
+  $("btnMetas").classList.toggle("hidden", vend);
+  $("btnUsers").classList.toggle("hidden", papel!=="dono");
   $("exec").classList.toggle("hidden", vend);
   $("histAviso").textContent = papel==="dono" ? "Desfazer uma carga faz os executivos dela voltarem para a carga anterior." : "Registro de todas as cargas feitas no painel.";
   if(!data) say("Seu usuário ainda não foi liberado no painel. Peça ao responsável para cadastrar seu acesso.", false);
@@ -137,7 +140,16 @@ async function carregar(){
     if(error){ say(erroAmigavel(error), false); $("source").textContent=""; return; }
     all.push(...data); if(data.length<1000) break; from+=1000;
   }
-  rows = all.map(toView);
+  rows = all.map(toView).filter(o=>o.p!==100);   // 100% = ganha, não está mais em andamento
+  metasOn = true;
+  const g=[]; from=0;
+  while(true){
+    const { data, error } = await db.from("oportunidades_ganhas").select("*").order("id").range(from, from+999);
+    if(error){ metasOn=false; break; }
+    g.push(...data); if(data.length<1000) break; from+=1000;
+  }
+  ganhas = g.map(r=>{ const o=toView(r); o.won=true; if(o.mi==null && r.carga_em){ const d=new Date(r.carga_em); o.mi=d.getFullYear()*12+d.getMonth(); } return o; });
+  if(metasOn){ const { data, error } = await db.from("metas").select("*"); if(error) metasOn=false; else metas=data||[]; }
   const { data:uc } = await db.from("cargas").select("criada_em,criada_por").eq("desfeita",false).order("criada_em",{ascending:false}).limit(1);
   ultimaCarga = uc && uc[0] || null;
   if(state.exec!=="__all" && !rows.some(o=>o.exec===state.exec)) state.exec="__all";
@@ -167,6 +179,11 @@ $("file").addEventListener("change", async e=>{
       const l = raw.map(fromSheet).filter(x=>x.codigo);
       porArquivo.push({ nome:f.name, qtd:l.length }); linhas.push(...l);
     }
+    // Situação: descartadas/perdidas são ignoradas; ganhas (WON) contam como 100%
+    const IGN=/^(DISCARDED|DESCARTAD[AO]|LOST|PERDID[AO])$/, WON=/^(WON|GANH[AO])$/;
+    const nDesc=linhas.filter(l=>IGN.test(l.situacao)).length;
+    linhas=linhas.filter(l=>!IGN.test(l.situacao));
+    linhas.forEach(l=>{ if(WON.test(l.situacao)) l.probabilidade=100; delete l.situacao; });
     // vendedor: só as oportunidades do próprio código T
     let ignoradas=0;
     if(papel==="vendedor"){ const antes=linhas.length; linhas=linhas.filter(l=>codigoT(l.executivo)===meuT); ignoradas=antes-linhas.length;
@@ -174,10 +191,13 @@ $("file").addEventListener("change", async e=>{
     // mesma oportunidade em mais de um arquivo: vale a última
     const porCodigo=new Map(); linhas.forEach(l=>porCodigo.set(l.codigo,l)); const dup=linhas.length-porCodigo.size; linhas=[...porCodigo.values()];
     const execs=[...new Set(linhas.map(l=>l.executivo))].sort();
+    const nGanhas = linhas.filter(l=>l.probabilidade===100).length;
     pendente = { arquivos:files.map(f=>f.name), linhas, execs };
     $("cargaBody").innerHTML =
       `<ul class="files">${porArquivo.map(a=>`<li>${esc(a.nome)}: ${a.qtd} oportunidades</li>`).join("")}</ul>`+
       (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. Você só pode atualizar a carteira do código ${meuT}.</p>`:"")+
+      (nDesc?`<p style="font-size:13px;color:var(--muted)">${nDesc} oportunidade(s) com situação descartada ou perdida foram ignoradas.</p>`:"")+
+      (nGanhas?`<p style="font-size:13px;color:var(--muted)">${nGanhas} oportunidade(s) com 100% serão registradas como <b>ganhas</b> e passam a contar no Realizado das metas.</p>`:"")+
       (semScc.length?`<p style="font-size:13px;color:var(--muted)">Sem a coluna "Valor Serviços Recorrentes" (SCC): ${semScc.map(esc).join(", ")}. O SCC dessas oportunidades fica zerado.</p>`:"")+
       (dup?`<p style="font-size:13px;color:var(--muted)">${dup} oportunidade(s) repetida(s) entre arquivos foram consideradas uma vez só.</p>`:"")+
       `<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Depois da carga</th><th class="n">Contas</th></tr></thead><tbody>`+
@@ -211,6 +231,7 @@ const AJUDA = [
   ["Valor CDU/Adesão","Valor de adesão / CDU (não recorrente)"],
   ["Valor Serviços Não Recorrentes","Valor de implantação / serviços"],
   ["Valor Serviços Recorrentes","SCC: serviços recorrentes mensais (se não vier, fica zerado)"],
+  ["Situação","Opcional: WON conta como ganha (100%); DISCARDED e LOST são ignoradas"],
   ["Descrição","Opcional: descrição da oportunidade"]
 ];
 $("ajudaCols").innerHTML = AJUDA.map(([c,d])=>`<tr><td style="white-space:nowrap"><b style="font-weight:600">${esc(c)}</b>${OPCIONAIS.includes(c)?' <span class="badge">opcional</span>':""}</td><td style="color:var(--muted)">${esc(d)}</td></tr>`).join("");
@@ -223,8 +244,8 @@ $("ajudaEscolher").addEventListener("click", ()=>{
   $("dlgAjuda").close(); $("file").click();
 });
 $("ajudaModelo").addEventListener("click", ()=>{
-  const cab = REQUIRED.concat(["Valor Serviços Recorrentes","Descrição"]);
-  const ex = ["123456","EMPRESA EXEMPLO LTDA","Software","5. Propostas","30%","31/12/2026","JOSE DA SILVA (T12345)",1500,20000,800,35000,1200,"Exemplo de oportunidade"];
+  const cab = REQUIRED.concat(["Valor Serviços Recorrentes","Situação","Descrição"]);
+  const ex = ["123456","EMPRESA EXEMPLO LTDA","Software","5. Propostas","30%","31/12/2026","JOSE DA SILVA (T12345)",1500,20000,800,35000,1200,"OPEN","Exemplo de oportunidade"];
   const ws = XLSX.utils.aoa_to_sheet([cab, ex]); ws["!cols"]=cab.map(c=>({wch:Math.max(14,c.length+2)}));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Oportunidades");
   XLSX.writeFile(wb, "modelo-oportunidades.xlsx");
@@ -263,7 +284,8 @@ $("btnLimpar").addEventListener("click", async ()=>{
 
 /* ---------- árvore de datas ---------- */
 function arvoreDatas(){
-  const cont={}; rows.forEach(o=>{ const k=mKey(o); cont[k]=(cont[k]||0)+1; });
+  // meses com oportunidades em andamento OU ganhas (as ganhas saem de "rows", mas precisam aparecer no filtro)
+  const cont={}; rows.concat(ganhas.filter(o=>state.exec==="__all"||o.exec===state.exec)).forEach(o=>{ const k=mKey(o); cont[k]=(cont[k]||0)+1; });
   const anos={};
   Object.keys(cont).filter(k=>k!=="sem").sort().forEach(k=>{ const [y,m]=k.split("-").map(Number), q=Math.ceil(m/3);
     ((anos[y]=anos[y]||{})[q]=anos[y][q]||[]).push({k,m,n:cont[k]}); });
@@ -271,6 +293,7 @@ function arvoreDatas(){
 }
 function rotuloDatas(t){
   const sel=[...state.meses]; if(!sel.length) return "Todos";
+  if(sel.length===1){ if(sel[0]==="sem") return "Sem data"; const [y,m]=sel[0].split("-"); return `${MESL[+m-1]}/${y}`; }
   const has=ks=>ks.every(k=>state.meses.has(k));
   for(const y in t.anos){ const ks=Object.values(t.anos[y]).flat().map(x=>x.k); if(sel.length===ks.length && has(ks)) return y;
     for(const q in t.anos[y]){ const kq=t.anos[y][q].map(x=>x.k); if(sel.length===kq.length && has(kq)) return `${q}º Tri ${y}`; } }
@@ -295,7 +318,7 @@ function htmlDatas(t){
 
 /* ---------- painel ---------- */
 const HZ = {
-  fc:{name:"Forecast", rule:"Mês atual, probabilidade de 60% ou mais", f:o=>o.fc},
+  fc:{name:"Forecast", rule:"Data prevista no mês atual", f:o=>o.fc},
   pp:{name:"Pipeline", rule:"Mês atual e os dois seguintes", f:o=>o.pp},
   tt:{name:"Total", rule:"Todas as oportunidades em andamento", f:()=>true}
 };
@@ -323,28 +346,31 @@ function render(){
   $("filters").innerHTML = `<div class="dwrap"><span class="fl">Data prevista</span>
       <button type="button" class="dbtn ${dAtivo?"on":""}" data-dt="1" aria-expanded="${state.dtOpen}">${esc(rotuloDatas(tD))}<i>▾</i></button>
       ${state.dtOpen?`<div class="dpop" role="dialog" aria-label="Filtro de data prevista">${htmlDatas(tD)}</div>`:""}</div>
+    <span class="fsep"></span><span class="fl">Situação</span>
+    ${[["and","Em andamento"],["gan","Ganhas"],["all","Todas"]].map(([k,t])=>`<button class="chip seg ${state.sit===k?"on":""}" data-sit="${k}">${t}</button>`).join("")}
     <span class="fsep"></span><span class="fl">Probabilidade</span>
     <button class="chip all ${state.probs.size?"":"on"}" data-p="__all" aria-pressed="${!state.probs.size}">Todas</button>`+
     pvals.map(v=>`<button class="chip ${state.probs.has(v)?"on":""}" data-p="${v}" aria-pressed="${state.probs.has(v)}">${v==="s"?"Sem probabilidade":v+"%"}</button>`).join("")+
     `<span class="pcount">${state.probs.size? `<b>${state.probs.size}</b> de ${pvals.length} selecionadas` : `todas as ${pvals.length} faixas`}</span>`+
-    (hzAtivo||state.probs.size||dAtivo? `<span class="fsum">Horizonte: <b>${hzAtivo?HZ[state.hz].name:"Total"}</b> · Data: <b>${esc(rotuloDatas(tD))}</b> · Probabilidade: <b>${state.probs.size?[...state.probs].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b).map(v=>v==="s"?"sem prob.":v+"%").join(", "):"todas"}</b></span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
+    (hzAtivo||state.probs.size||dAtivo||state.sit!=="and"? `<span class="fsum">Situação: <b>${{and:"em andamento",gan:"ganhas",all:"todas"}[state.sit]}</b> · Horizonte: <b>${hzAtivo?HZ[state.hz].name:"Total"}</b> · Data: <b>${esc(rotuloDatas(tD))}</b> · Probabilidade: <b>${state.probs.size?[...state.probs].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b).map(v=>v==="s"?"sem prob.":v+"%").join(", "):"todas"}</b></span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
 
   document.querySelectorAll('.dpop input[data-ind]').forEach(i=>i.indeterminate=true);
 
   // quadro por executivo (respeita horizonte, probabilidade e data)
-  const vis=base.filter(HZ[state.hz].f);
-  const rk=v=>v.some(o=>o.fc)?0:v.some(o=>o.pp)?1:2;
+  const gBase=ganhas.filter(o=>(state.exec==="__all"||o.exec===state.exec) && dOk(o));
+  const vis=(state.sit!=="gan"? base.filter(HZ[state.hz].f) : []).concat(state.sit!=="and"? gBase.filter(HZ[state.hz].f) : []);
+  const rk=v=>v.every(o=>o.won)?3: v.some(o=>!o.won&&o.fc)?0 : v.some(o=>!o.won&&o.pp)?1 : 2;
   if(!vis.length){ $("execBoards").innerHTML=`<div class="empty"><b>Nenhuma conta com estes filtros</b>Clique de novo no card selecionado ou em "Limpar filtros" para voltar a ver todas.</div>`; }
   else $("execBoards").innerHTML=[...new Set(vis.map(o=>o.exec))].sort((a,b)=>nm(a).localeCompare(nm(b),"pt-BR")).map(e=>{
     const a=vis.filter(o=>o.exec===e), m={}; a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});
     const list=Object.entries(m).sort((x,y)=>rk(x[1])-rk(y[1])||x[0].localeCompare(y[0],"pt-BR"));
-    return `<div class="board"><h2>Executivo: ${esc(nm(e))}<small>${list.length} contas em aberto · ${a.length} oportunidades</small></h2>
+    return `<div class="board"><h2>Executivo: ${esc(nm(e))}<small>${list.length} ${state.sit==="and"?"contas em aberto":"contas"} · ${a.length} oportunidades${state.sit!=="and"?` (${a.filter(o=>o.won).length} ganhas)`:""}</small></h2>
       <div class="meta">Atualizado em ${a[0].cargaEm? dt(a[0].cargaEm):"—"}</div>
-      <div class="leg"><span><i style="background:var(--fc)"></i>No forecast</span><span><i style="background:var(--pp)"></i>No pipeline</span><span><i style="background:var(--tt)"></i>Demais em andamento</span></div>
-      <div class="tiles">${list.map(([k,v])=>`<button class="tile ${["fc","pp","tt"][rk(v)]}" data-acc="${esc(k)}"><span class="an">${esc(title(k))}</span><span class="am">${v.length} ${v.length>1?"oportunidades":"oportunidade"} · ${esc(topEtapa(v))}</span></button>`).join("")}</div></div>`}).join("");
+      <div class="leg"><span><i style="background:var(--fc)"></i>No forecast</span><span><i style="background:var(--pp)"></i>No pipeline</span><span><i style="background:var(--tt)"></i>Demais em andamento</span>${state.sit!=="and"?'<span><i style="background:var(--won)"></i>Ganha</span>':""}</div>
+      <div class="tiles">${list.map(([k,v])=>`<button class="tile ${["fc","pp","tt","gw"][rk(v)]}" data-acc="${esc(k)}"><span class="an">${esc(title(k))}</span><span class="am">${v.length} ${v.length>1?"oportunidades":"oportunidade"} · ${esc(topEtapa(v))}</span></button>`).join("")}</div></div>`}).join("");
 
   // horizontes
-  $("hz").innerHTML=Object.entries(HZ).map(([k,h])=>{ const s=agg(base.filter(h.f)); const won=base.filter(o=>h.f(o)&&o.p===100).length;
+  $("hz").innerHTML=Object.entries(HZ).map(([k,h])=>{ const s=agg(base.filter(h.f)); const won=0;
     return `<button class="hz ${k}" data-h="${k}" aria-pressed="${state.hz===k}">
       <div class="name">${h.name}${k==="fc"?'<span class="tag">Compromisso do mês</span>':""}</div><div class="rule">${h.rule}</div>
       <div class="counts"><b>${s.n}</b>oportunidades &nbsp; <b>${s.contas}</b>contas${k==="fc"&&won?` &nbsp;· ${won} ganha(s)`:""}</div>
@@ -353,6 +379,8 @@ function render(){
       <div class="vrow"><span><i class="dot d-rr"></i>RR (mensal)</span><b class="v-rr" title="${full(s.mrr)}">${brl(s.mrr)}</b></div>
       <div class="vrow"><span><i class="dot d-scc"></i>SCC (serv. recorrentes)</span><b class="v-scc" title="${full(s.scc)}">${brl(s.scc)}</b></div></div>
       <div class="hint">${state.hz===k? (k==="tt"?"Mostrando todas":"Filtro ativo · clique para ver todas") : "Clique para filtrar"}</div></button>`}).join("");
+
+  renderMetas();
 
   const cur=inHz(), hn=HZ[state.hz].name;
 
@@ -374,7 +402,6 @@ function render(){
 
   // alertas
   const B=cur; const al=[], grp=a=>{const m={};a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});return Object.entries(m).map(([k,v])=>`${esc(title(k))} (${v.length})`).join(", ")};
-  const a1=B.filter(o=>o.mi===CUR&&!o.fc); if(a1.length) al.push(["Fecham este mês, mas estão fora do forecast (abaixo de 60%)", `${grp(a1)} · ${brl(sum(a1,"ad")+sum(a1,"im"))} + RR ${brl(sum(a1,"mrr"))} + SCC ${brl(sum(a1,"scc"))}`]);
   const a2=B.filter(o=>/^\s*[67]\./.test(o.etapa)&&o.p!=null&&o.p<=30); if(a2.length) al.push(["Negociação ou fechamento com probabilidade de 30% ou menos", grp(a2)]);
   const a3=B.filter(o=>o.p==null); if(a3.length) al.push(["Sem probabilidade preenchida", grp(a3)]);
   const a4=B.filter(o=>o.mi!=null&&o.mi<CUR); if(a4.length) al.push(["Data prevista já vencida", grp(a4)]);
@@ -400,15 +427,333 @@ function render(){
     ordem.map(e=>{const a=rowsP.filter(o=>o.exec===e);return xrow(nm(e), `${new Set(a.map(o=>o.acc)).size} contas · ${a.length} oportunidades`, a, "", ini(e))}).join("");
 
   // contas
-  const q=state.q.toLowerCase(), byAcc={}; cur.forEach(o=>{(byAcc[o.acc]=byAcc[o.acc]||[]).push(o)});
+  const q=state.q.toLowerCase(), byAcc={}; vis.forEach(o=>{(byAcc[o.acc]=byAcc[o.acc]||[]).push(o)});
   const peso=v=>sum(v,"ad")+sum(v,"im")+sum(v,"mrr")+sum(v,"scc");
   const accs=Object.entries(byAcc).filter(([k,v])=>!q||k.toLowerCase().includes(q)||v.some(o=>o.code.includes(q))).sort((a,b)=>peso(b[1])-peso(a[1]));
   $("accTbl").innerHTML=`<thead><tr><th>Conta</th><th class="n">Opp</th><th>Etapa mais avançada</th><th>Fechamento</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th><th class="n h-scc">SCC</th></tr></thead><tbody>`+
    (accs.length? accs.map(([k,v])=>{ const dmin=v.filter(o=>o.d).map(o=>o.d).sort((a,b)=>a-b)[0], open=state.open.has(k);
      let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b></td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n v-ad">${brl(sum(v,"ad"))}</td><td class="n v-im">${brl(sum(v,"im"))}</td><td class="n v-rr">${brl(sum(v,"mrr"))}</td><td class="n v-scc">${brl(sum(v,"scc"))}</td></tr>`;
-     if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n"><span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span></td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td><td class="n">${full(o.scc)}</td></tr>`).join("");
+     if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n">${o.won?'<span class="pill won">Ganha</span>':`<span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span>`}</td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td><td class="n">${full(o.scc)}</td></tr>`).join("");
      return h; }).join("") : `<tr><td colspan="8" style="color:var(--muted)">Nenhuma conta com estes filtros${q?" com essa busca":""}.</td></tr>`)+"</tbody>";
 }
+
+
+/* ---------- metas ---------- */
+const VERT = [
+  {k:"ad", m:"meta_adesao",      nome:"Adesão",      cls:"ad"},
+  {k:"im", m:"meta_implantacao", nome:"Implantação", cls:"im"},
+  {k:"mrr",m:"meta_rr",          nome:"RR mensal",   cls:"rr"},
+  {k:"scc",m:"meta_scc",         nome:"SCC",         cls:"scc"}
+];
+const keyMi = mi => `${Math.floor(mi/12)}-${String(mi%12+1).padStart(2,"0")}`;
+const CURK = keyMi(CUR);
+function periodo(){
+  const ks=[...state.meses].filter(k=>k!=="sem").sort();
+  if(ks.length){ let label=rotuloDatas(arvoreDatas());
+    if(/meses$/.test(label)) label=ks.map(k=>{ const [y,m]=k.split("-"); return MES[+m-1]+"/"+y.slice(2); }).join(", ");
+    return {ks, label}; }
+  return ks.length? {ks, label: rotuloDatas(arvoreDatas())} : {ks:[CURK], label:`${MESL[TODAY.getMonth()]}/${TODAY.getFullYear()} (mês atual)`};
+}
+const pct = (a,b) => b>0? a/b*100 : null;
+const fmtPct = v => v==null? "—" : (v>=999? ">999" : Math.round(v))+"%";
+const stat = v => v==null? ["sm","Sem meta"] : v>=100? ["ok","No caminho"] : v>=70? ["at","Atenção"] : ["rk","Em risco"];
+
+function mesesPipe(P){
+  const [y,m]=P.ks[0].split("-").map(Number); const ini=Math.max(CUR, y*12+m-1);
+  return [0,1,2].map(i=>keyMi(ini+i));
+}
+const rotMes = k => { const [y,m]=k.split("-"); return MES[+m-1]+"/"+y.slice(2); };
+function renderMetas(){ renderMetas0(); renderProj(); }
+function renderMetas0(){
+  const card=$("metasCard");
+  if(!metasOn){ card.classList.remove("hidden"); $("metasDesc").textContent=""; $("metasBody").innerHTML=`<div class="empty" style="margin:0"><b>Metas ainda não ativadas no banco</b>Rode o script alteracao-metas.sql no Supabase.</div>`; return; }
+  const P=periodo(), inP=o=>o.mi!=null && P.ks.includes(keyMi(o.mi));
+  const P3=mesesPipe(P);
+  // códigos visíveis
+  let cods=new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.map(o=>codigoT(o.exec)), ...ganhas.map(o=>codigoT(o.exec))].filter(Boolean));
+  if(papel==="vendedor") cods=new Set(meuT?[meuT]:[]);
+  else if(state.exec!=="__all"){ const c=codigoT(state.exec); cods=new Set(c?[c]:[]); }
+  const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c && !nomeDe[c]) nomeDe[c]=nm(o.exec); });
+  const calc = cs => { const r={};
+    VERT.forEach(v=>{
+      const metaDe=(c,ks)=>metas.filter(m=>m.codigo_t.toUpperCase()===c && ks.includes(String(m.mes).slice(0,7))).reduce((a,m)=>a+Number(m[v.m]||0),0);
+      const realDe=c=>ganhas.filter(o=>codigoT(o.exec)===c && inP(o)).reduce((a,o)=>a+o[v.k],0);
+      const fcDe  =c=>rows.filter(o=>codigoT(o.exec)===c && inP(o) && pOk0(o)).reduce((a,o)=>a+o[v.k],0);
+      const pipeDe=c=>rows.filter(o=>codigoT(o.exec)===c && o.pp).reduce((a,o)=>a+o[v.k],0);
+      // só entram no % os executivos que têm meta desta vertente no período; os demais aparecem à parte
+      let meta=0,real=0,fc=0,rF=0,fF=0,nF=0,meta3=0,pipe3=0;
+      cs.forEach(c=>{ const m=metaDe(c,P.ks), re=realDe(c), f=fcDe(c);
+        if(m>0){ meta+=m; real+=re; fc+=f; } else if(re+f>0){ rF+=re; fF+=f; nF++; }
+        const m3=metaDe(c,P3); if(m3>0){ meta3+=m3; pipe3+=pipeDe(c); } });
+      const semMeta = meta===0;
+      if(semMeta){ real=rF; fc=fF; rF=0; fF=0; nF=0; }
+      r[v.k]={meta,real,fc,rF,fF,nF,at:pct(real,meta),proj:pct(real+fc,meta),gap:Math.max(0,meta-real-fc),cob: meta3>0? pipe3/meta3 : null};
+    });
+    const avg=f=>{ const xs=VERT.map(v=>r[v.k][f]).filter(x=>x!=null).map(x=>Math.min(100,x)); return xs.length? xs.reduce((a,b)=>a+b,0)/xs.length : null; };
+    r.media = avg("at"); r.mproj = avg("proj");
+    r.nG = ganhas.filter(o=>cs.has(codigoT(o.exec)) && inP(o)).length;
+    return r; };
+  const linha = (v,x) => { const [sc,st]=stat(x.proj); let a=Math.min(100,x.at||0), f=Math.max(0,Math.min(100,(x.proj||0))-a);
+    if(!x.meta && x.real+x.fc>0){ a=x.real/(x.real+x.fc)*100; f=100-a; }
+    return `<div class="mv">
+      <div class="mvl"><i class="dot d-${v.cls}"></i><div><b>${v.nome}</b><span class="mmeta">Meta ${x.meta? brl(x.meta) : "—"}</span></div></div>
+      <div class="mvb"><div class="mbar" title="Realizado ${full(x.real)} · Previsto no período ${full(x.fc)} · Meta ${full(x.meta)}"><i class="mr ${x.meta?sc:"nm"}" style="width:${a}%"></i><i class="mf ${x.meta?"":"nm"}" style="width:${f}%"></i></div>
+        <div class="mvt">${x.meta? `<b>${fmtPct(x.at)}</b> realizado · projeção <b>${fmtPct(x.proj)}</b> <span>(realizado + previsto)</span>` : `<span>sem meta cadastrada${x.real+x.fc?` · realizado ${brl(x.real)} + previsto ${brl(x.fc)} = <b>${brl(x.real+x.fc)}</b>`:""}</span>`}</div></div>
+      <div class="mvn"><span class="mst ${sc}">${st}</span>
+        ${x.nF?`<small class="fora" title="Executivos sem meta desta vertente no período não entram no percentual">+ ${x.nF} sem meta (fora do %): realizado ${brl(x.rF)} · previsto ${brl(x.fF)}</small>`:""}
+        <small>Meta <b>${brl(x.meta)}</b> · Realizado <b>${brl(x.real)}</b> · Previsto <b>${brl(x.fc)}</b></small>
+        <small>${x.meta? (x.real+x.fc>=x.meta? `<span class="v-rr">Folga ${brl(x.real+x.fc-x.meta)}</span>` : `<span class="falta">Falta ${brl(x.meta-x.real-x.fc)}</span>`) : ""}${x.cob!=null?`${x.meta?" · ":""}pipe ${rotMes(P3[0]).split("/")[0]}–${rotMes(P3[2]).split("/")[0]} ${x.cob.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})}x`:""}</small></div>
+    </div>`; };
+  const bloco = (label,sub,avatar,cs,cls) => { const r=calc(cs);
+    return {media:r.mproj, html:`<div class="mrow ${cls||""}"><div class="xwho"><span class="av">${avatar}</span><div><b>${esc(label)}</b><small>${sub}${r.nG?` · ${r.nG} ganha(s) no período`:""}</small>
+      ${r.media!=null?`<span class="mmed ${stat(r.mproj)[0]}" title="Médias das vertentes com meta, cada uma limitada a 100%">Realizado ${fmtPct(r.media)} · Projeção ${fmtPct(r.mproj)}</span>`:""}</div></div>
+      <div class="mvs">${VERT.map(v=>linha(v,r[v.k])).join("")}</div></div>`}; };
+  const lista=[...cods].sort();
+  const blocos=lista.map(c=>{ const n=nomeDe[c]||c; const ini=n.split(/\s+/).filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join("").toUpperCase()||"T";
+    return bloco(n, c, ini, new Set([c])); }).sort((a,b)=>(b.media??-1)-(a.media??-1));
+  const time = (papel!=="vendedor" && lista.length>1) ? bloco(`Time (${lista.length} executivos)`, "soma de todos", "∑", new Set(lista), "team").html : "";
+  card.classList.remove("hidden");
+  $("metasDesc").innerHTML = `Período: <b>${esc(P.label)}</b> (${P.ks.length} ${P.ks.length>1?"meses":"mês"}; a meta é a soma dos meses) · muda pelo filtro de Data prevista. Na barra: cheio = realizado (ganhas, 100%); listrado = previsto (em andamento com data prevista no período${state.probs.size?", só as probabilidades filtradas":""}).`;
+  $("metasBody").innerHTML = lista.length? time + blocos.map((b,i)=>b.html.replace('<span class="av">',`<span class="rank">${blocos.length>1?(i+1)+"º":""}</span><span class="av">`)).join("")
+    : `<div class="empty" style="margin:0"><b>Nenhuma meta carregada</b>${papel==="vendedor"?"Sua meta ainda não foi cadastrada.":'Clique em "Carregar metas" para enviar a planilha de metas.'}</div>`;
+}
+
+
+/* ---------- projeções (velocímetros, rosca e pipe 3 meses) ---------- */
+const COR={r:"#E24B4A",a:"#EF9F27",g:"#1D9E75",n:"#888780"};
+function renderProj(){
+  const card=$("projCard");
+  if(!metasOn){ card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const P=periodo(), inP=o=>o.mi!=null && P.ks.includes(keyMi(o.mi));
+  let cods=new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.map(o=>codigoT(o.exec)), ...ganhas.map(o=>codigoT(o.exec))].filter(Boolean));
+  if(papel==="vendedor") cods=new Set(meuT?[meuT]:[]);
+  else if(state.exec!=="__all"){ const c=codigoT(state.exec); cods=new Set(c?[c]:[]); }
+  const meu=o=>cods.has(codigoT(o.exec));
+  const metaDe=(v,ks)=>metas.filter(m=>cods.has(m.codigo_t.toUpperCase()) && ks.includes(String(m.mes).slice(0,7))).reduce((a,m)=>a+Number(m[v.m]||0),0);
+  const prev=rows.filter(o=>meu(o) && inP(o) && pOk0(o));
+  const quem = papel==="vendedor"? "" : state.exec!=="__all"? ` · ${esc(nm(state.exec))}` : (cods.size>1?` · time (${cods.size} executivos)`:"");
+  $("projTit").innerHTML=`Projeção do período · ${esc(P.label)}${quem}`;
+  $("projSub").textContent=`${P.ks.length} ${P.ks.length>1?"meses":"mês"} · meta = soma dos meses filtrados`;
+
+  // velocímetros
+  const MAX=150, pt=(p,r)=>{ const a=Math.PI*(1-Math.min(Math.max(p,0),MAX)/MAX); return [70+r*Math.cos(a),72-r*Math.sin(a)]; };
+  const arc=(p0,p1,c)=>{ const [x0,y0]=pt(p0,52),[x1,y1]=pt(p1,52); return `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A52 52 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${c}" stroke-width="10"/>`; };
+  $("gauges").innerHTML=VERT.map(v=>{
+    // no time, só entra quem tem meta desta vertente no período (se ninguém tiver, mostra tudo sem %)
+    const comMeta=new Set([...cods].filter(c=>metas.some(m=>m.codigo_t.toUpperCase()===c && P.ks.includes(String(m.mes).slice(0,7)) && Number(m[v.m]||0)>0)));
+    const dentro=o=>!comMeta.size || comMeta.has(codigoT(o.exec));
+    const meta=metaDe(v,P.ks), real=ganhas.filter(o=>meu(o)&&inP(o)&&dentro(o)).reduce((a,o)=>a+o[v.k],0);
+    const pv=prev.filter(dentro).reduce((a,o)=>a+o[v.k],0), pond=prev.filter(dentro).reduce((a,o)=>a+o[v.k]*((o.p||0)/100),0);
+    const nFora=comMeta.size? [...cods].filter(c=>!comMeta.has(c)).length : 0;
+    if(!meta) return `<div class="gc sm"><h4>${v.nome}</h4><div class="gnone">Sem meta no período</div>
+      <div class="kv"><span>Realizado</span><b>${brl(real)}</b><span>Previsto</span><b>${brl(pv)}</b></div></div>`;
+    const proj=(real+pv)/meta*100, pp=(real+pond)/meta*100, [nx,ny]=pt(proj,44), [px,py]=pt(pp,44);
+    const [sc]=stat(proj), dif=real+pv-meta;
+    return `<div class="gc"><h4><i class="dot d-${v.cls}"></i> ${v.nome}</h4>
+      <svg width="140" height="84" viewBox="0 0 140 84" role="img" aria-label="${v.nome}: projeção ${Math.round(proj)}%, ponderada ${Math.round(pp)}%">
+      ${arc(0,70,COR.r)}${arc(70,100,COR.a)}${arc(100,150,COR.g)}
+      <line x1="70" y1="72" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 3"/>
+      <line x1="70" y1="72" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="var(--ink)" stroke-width="2.5"/><circle cx="70" cy="72" r="4" fill="var(--ink)"/></svg>
+      <div class="gbig">${fmtPct(proj)}</div><div class="gsub">projeção · ponderada ${fmtPct(pp)}</div>
+      <div class="kv"><span>Meta</span><b>${brl(meta)}</b><span>Realizado</span><b>${brl(real)}</b><span>Previsto</span><b>${brl(pv)}</b><span>Ponderado</span><b>${brl(pond)}</b></div>
+      <span class="mst ${sc}" style="display:inline-block;margin-top:6px">${dif>=0?"Folga "+brl(dif):"Falta "+brl(-dif)}</span>
+      ${nFora?`<div class="gsub" style="margin-top:4px">${nFora} executivo(s) sem meta fora do cálculo</div>`:""}</div>`;
+  }).join("");
+
+  // rosca: origem do previsto por probabilidade
+  const tot=o=>o.ad+o.im+o.mrr+o.scc, grupos={};
+  prev.forEach(o=>{ const k=pKey(o); grupos[k]=(grupos[k]||0)+tot(o); });
+  const total=Object.values(grupos).reduce((a,b)=>a+b,0);
+  const corP=k=>k==="s"?COR.n : +k>=60?COR.g : +k>=30?COR.a : COR.r;
+  const ks=Object.keys(grupos).sort((a,b)=>a==="s"?1:b==="s"?-1:b-a);
+  if(!total){ $("donut").innerHTML=`<div class="gnone" style="padding:24px 0">Nada previsto no período${state.probs.size?" com as probabilidades filtradas":""}.</div>`; }
+  else {
+    const C=2*Math.PI*44; let off=0;
+    const segs=ks.map(k=>{ const len=grupos[k]/total*C; const el=`<circle cx="60" cy="60" r="44" fill="none" stroke="${corP(k)}" stroke-width="16" stroke-dasharray="${len.toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}" transform="rotate(-90 60 60)"/>`; off+=len; return el; }).join("");
+    const madura=ks.filter(k=>k!=="s"&&+k>=60).reduce((a,k)=>a+grupos[k],0)/total;
+    $("donut").innerHTML=`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="Origem do previsto por probabilidade">
+        <circle cx="60" cy="60" r="44" fill="none" stroke="var(--line)" stroke-width="16"/>${segs}
+        <text x="60" y="57" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--ink)">${brl(total)}</text>
+        <text x="60" y="73" text-anchor="middle" style="font-size:11px;fill:var(--muted)">previsto</text></svg>
+      <div class="dleg">${ks.map(k=>`<span><i style="background:${corP(k)}"></i>${k==="s"?"Sem probabilidade":k+"%"}: <b>${Math.round(grupos[k]/total*100)}%</b> · ${brl(grupos[k])}</span>`).join("")}
+        <span class="mst ${madura>=.5?"ok":"at"}" style="align-self:flex-start;margin-top:4px">${madura>=.5?"Previsto maduro (60%+ é a maior parte)":"Mês depende de contas imaturas"}</span></div></div>`;
+  }
+
+  // pipe 3 meses
+  const M3=mesesPipe(P), v=VERT.find(x=>x.k===state.pv)||VERT[0];
+  const cm3=new Set([...cods].filter(c=>metas.some(m=>m.codigo_t.toUpperCase()===c && M3.includes(String(m.mes).slice(0,7)) && Number(m[v.m]||0)>0)));
+  const dados=M3.map(k=>({k, meta:metaDe(v,[k]), pipe:rows.filter(o=>meu(o) && (!cm3.size||cm3.has(codigoT(o.exec))) && o.mi!=null && keyMi(o.mi)===k).reduce((a,o)=>a+o[v.k],0)}));
+  const sm=dados.reduce((a,d)=>a+d.meta,0), sp=dados.reduce((a,d)=>a+d.pipe,0), cob=sm? sp/sm : null;
+  const cc=x=>x==null?"sm": x>=3?"ok": x>=2?"at":"rk";
+  $("pipeTit").textContent=`Projeção do pipe · ${rotMes(M3[0])} a ${rotMes(M3[2])}`;
+  $("pipeCob").className="mst "+cc(cob); $("pipeCob").textContent= cob==null? "Sem meta" : "Cobertura "+cob.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+"x";
+  $("pipeChips").innerHTML=VERT.map(x=>`<button type="button" class="chip ${x.k===v.k?"on":""}" data-pv="${x.k}">${x.nome}</button>`).join("");
+  const mx=Math.max(1,...dados.map(d=>Math.max(d.meta,d.pipe))), h=100;
+  $("pipeBars").innerHTML=dados.map((d,i)=>{ const x=70+i*170, hm=d.meta/mx*h, hp=d.pipe/mx*h, c=d.meta? d.pipe/d.meta : null;
+    return `<rect x="${x}" y="${115-hm}" width="34" height="${Math.max(hm,1)}" rx="3" fill="var(--tt)"/><rect x="${x+40}" y="${115-hp}" width="34" height="${Math.max(hp,1)}" rx="3" fill="var(--c-${v.cls})"/>
+      <text x="${x+17}" y="${Math.max(11,109-hm)}" text-anchor="middle" style="font-size:11px;fill:var(--muted)">${brl(d.meta).replace("R$ ","")}</text>
+      <text x="${x+57}" y="${Math.max(11,109-hp)}" text-anchor="middle" style="font-size:11px;fill:var(--ink);font-weight:600">${brl(d.pipe).replace("R$ ","")}</text>
+      <text x="${x+37}" y="133" text-anchor="middle" style="font-size:12px;fill:var(--muted)">${rotMes(d.k)}</text>
+      <text x="${x+37}" y="148" text-anchor="middle" style="font-size:11.5px;font-weight:700;fill:${c==null?COR.n:c>=3?COR.g:c>=2?COR.a:COR.r}">${c==null?"sem meta":c.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+"x"}</text>`; }).join("")+
+    `<line x1="40" y1="115" x2="520" y2="115" stroke="var(--line)"/>`;
+}
+
+/* carga de metas */
+const MREQ = ["Código T","Mês"], MVAL=["Meta Adesão","Meta Implantação","Meta RR","Meta SCC"];
+const MALIAS = {"codigo t":"Código T","codigo":"Código T","cod t":"Código T","t":"Código T","vendedor":"Código T",
+  "mes":"Mês","mes ano":"Mês","competencia":"Mês","periodo":"Mês",
+  "meta adesao":"Meta Adesão","meta cdu":"Meta Adesão","meta cdu/adesao":"Meta Adesão","adesao":"Meta Adesão",
+  "meta implantacao":"Meta Implantação","meta servicos":"Meta Implantação","meta servicos nao recorrentes":"Meta Implantação","implantacao":"Meta Implantação",
+  "meta rr":"Meta RR","meta mensalidade":"Meta RR","rr":"Meta RR",
+  "meta scc":"Meta SCC","meta servicos recorrentes":"Meta SCC","scc":"Meta SCC","nome":"Nome"};
+const MCANON={}; Object.entries(MALIAS).forEach(([k,v])=>MCANON[normH(k)]=v);
+const MABR={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+function parseMes(v){
+  if(v==null||v==="") return null;
+  let y,m;
+  if(v instanceof Date){ y=v.getFullYear(); m=v.getMonth()+1; }
+  else if(typeof v==="number"){ const d=XLSX.SSF.parse_date_code(v); if(!d) return null; y=d.y; m=d.m; }
+  else { const t=String(v).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    let x;
+    if((x=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))){ y=+x[3]; m=+x[2]; }
+    else if((x=t.match(/^(\d{1,2})[\/\-.](\d{4})$/))){ y=+x[2]; m=+x[1]; }
+    else if((x=t.match(/^(\d{4})-(\d{1,2})/))){ y=+x[1]; m=+x[2]; }
+    else if((x=t.match(/^([a-z]{3})[a-z]*[\/\-. ]+(\d{2,4})$/)) && MABR[x[1]]){ m=MABR[x[1]]; y=+x[2]; if(y<100) y+=2000; }
+    else return null; }
+  if(!(m>=1&&m<=12) || !(y>=2000&&y<=2100)) return null;
+  return `${y}-${String(m).padStart(2,"0")}-01`;
+}
+let metasPend=null;
+function abrirAjudaMetas(){ $("dlgMetas").showModal(); }
+$("btnMetas").addEventListener("click", abrirAjudaMetas);
+$("metasCancelar").addEventListener("click", ()=>$("dlgMetas").close());
+$("metasEscolher").addEventListener("click", ()=>{ $("dlgMetas").close(); $("fileMetas").click(); });
+$("metasModelo").addEventListener("click", ()=>{
+  const cods=[...new Set(rows.concat(ganhas).map(o=>codigoT(o.exec)).filter(Boolean))].sort();
+  const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c&&!nomeDe[c]) nomeDe[c]=nm(o.exec); });
+  const linhas=[["Código T","Nome","Mês","Meta Adesão","Meta Implantação","Meta RR","Meta SCC"]];
+  const lista=cods.length?cods:["T12345"];
+  lista.forEach(c=>{ for(let mi=CUR; mi<=Math.floor(CUR/12)*12+11; mi++) linhas.push([c, nomeDe[c]||"", `${String(mi%12+1).padStart(2,"0")}/${Math.floor(mi/12)}`, 0,0,0,0]); });
+  const ws=XLSX.utils.aoa_to_sheet(linhas); ws["!cols"]=[{wch:10},{wch:30},{wch:10},{wch:14},{wch:17},{wch:10},{wch:10}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Metas"); XLSX.writeFile(wb, "modelo-metas.xlsx");
+});
+$("fileMetas").addEventListener("change", async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true});
+    const raw=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null}).map(r=>{ const o={}; for(const k in r){ const c=MCANON[normH(k)]||k; if(!(c in o)||o[c]==null) o[c]=r[k]; } return o; });
+    if(!raw.length) throw new Error("A planilha de metas está vazia.");
+    const cols=new Set(raw.flatMap(r=>Object.keys(r)));
+    const miss=MREQ.filter(c=>!cols.has(c)); if(miss.length) throw new Error(`A planilha de metas não tem as colunas: ${miss.join(", ")}.`);
+    if(!MVAL.some(c=>cols.has(c))) throw new Error("A planilha de metas não tem nenhuma coluna de meta (Meta Adesão, Meta Implantação, Meta RR ou Meta SCC).");
+    const faltam=MVAL.filter(c=>!cols.has(c));
+    const erros=[], mapa=new Map();
+    raw.forEach((r,i)=>{
+      const cv=r["Código T"], mes=parseMes(r["Mês"]);
+      if((cv==null||cv==="") && (r["Mês"]==null||r["Mês"]==="")) return;
+      let c=String(cv??"").trim().toUpperCase(); if(/^\d+$/.test(c)) c="T"+c;
+      if(!/^T\d+$/.test(c)){ erros.push(`linha ${i+2}: código T inválido (${esc(cv??"vazio")})`); return; }
+      if(!mes){ erros.push(`linha ${i+2}: mês inválido (${esc(r["Mês"]??"vazio")})`); return; }
+      mapa.set(c+"|"+mes,{codigo_t:c,mes,meta_adesao:num(r["Meta Adesão"]),meta_implantacao:num(r["Meta Implantação"]),meta_rr:num(r["Meta RR"]),meta_scc:num(r["Meta SCC"])});
+    });
+    const linhas=[...mapa.values()];
+    if(!linhas.length) throw new Error("Nenhuma linha válida na planilha de metas."+(erros.length?" "+erros.slice(0,3).join("; "):""));
+    metasPend=linhas;
+    const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c&&!nomeDe[c]) nomeDe[c]=nm(o.exec); });
+    const porCod={}; linhas.forEach(l=>(porCod[l.codigo_t]=porCod[l.codigo_t]||[]).push(l));
+    const mesTxt=k=>{ const [y,m]=k.split("-"); return MES[+m-1]+"/"+y; };
+    $("metasConfBody").innerHTML=
+      `<p style="font-size:13.5px;margin:0 0 10px">${esc(f.name)}: <b>${linhas.length}</b> meta(s) de <b>${Object.keys(porCod).length}</b> vendedor(es). As metas destes vendedores e meses serão substituídas; as demais não mudam.</p>`+
+      (faltam.length?`<p style="font-size:13px;color:var(--muted)">Colunas ausentes (ficam zeradas): ${faltam.join(", ")}.</p>`:"")+
+      (erros.length?`<p style="font-size:13px;color:var(--warn)">${erros.length} linha(s) ignorada(s): ${erros.slice(0,5).join("; ")}${erros.length>5?"…":""}</p>`:"")+
+      `<div class="tbl"><table><thead><tr><th>Código T</th><th>Nome</th><th>Meses</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th><th class="n h-scc">SCC</th></tr></thead><tbody>`+
+      Object.entries(porCod).sort().map(([c,ls])=>{ const ks=ls.map(l=>l.mes.slice(0,7)).sort(), t=k=>ls.reduce((a,l)=>a+l[k],0);
+        return `<tr><td>${c}</td><td>${esc(nomeDe[c]||"—")}</td><td>${ks.length>1?mesTxt(ks[0])+" a "+mesTxt(ks[ks.length-1])+` (${ks.length})`:mesTxt(ks[0])}</td><td class="n">${brl(t("meta_adesao"))}</td><td class="n">${brl(t("meta_implantacao"))}</td><td class="n">${brl(t("meta_rr"))}</td><td class="n">${brl(t("meta_scc"))}</td></tr>`}).join("")+
+      `</tbody></table></div><p style="font-size:12px;color:var(--muted)">Valores somados de todos os meses do arquivo.</p>`;
+    $("dlgMetasConf").showModal();
+  }catch(err){ say(err.message||"Não foi possível ler a planilha de metas.", false); }
+});
+$("metasConfCancelar").addEventListener("click", ()=>{ metasPend=null; $("dlgMetasConf").close(); });
+$("metasConfirmar").addEventListener("click", async ()=>{
+  if(!metasPend) return; const b=$("metasConfirmar"); b.disabled=true; b.textContent="Gravando…";
+  const { data, error } = await db.rpc("registrar_metas",{ p_linhas: metasPend });
+  b.disabled=false; b.textContent="Confirmar metas"; $("dlgMetasConf").close();
+  if(error){ say(/Somente/i.test(error.message)? error.message : erroAmigavel(error), false); return; }
+  say(`Metas gravadas: ${metasPend.length} linha(s).`, true); metasPend=null; await carregar();
+});
+
+
+/* ---------- usuários (somente dono, via Edge Function "usuarios") ---------- */
+let usuarios=[], uEdit=null;
+const PAPEIS={dono:"Dono",usuario:"Gestor",vendedor:"Vendedor"};
+async function chamarUsuarios(body){
+  const { data, error } = await db.functions.invoke("usuarios",{ body });
+  if(error){ let m=error.message||"Erro"; try{ const j=await error.context.json(); if(j&&j.error) m=j.error; }catch(e){}
+    if(/Failed to send|Failed to fetch|not found|404/i.test(m)) m="A função \"usuarios\" ainda não foi publicada no Supabase (Edge Functions).";
+    throw new Error(m); }
+  if(data && data.error) throw new Error(data.error);
+  return data;
+}
+const uMsg=(t,ok)=>{ const m=$("uMsg"); m.textContent=t; m.className="umsg "+(ok?"ok":"err"); };
+const loginDe=u=> u.papel==="vendedor" && u.codigo_t ? u.codigo_t : u.email;
+const quando=d=> d? new Date(d).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}) : "nunca";
+function senhaAleatoria(){ const c="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"; let s=""; const a=new Uint32Array(10); crypto.getRandomValues(a); a.forEach(n=>s+=c[n%c.length]); return s.slice(0,8)+"@"+s.slice(8); }
+function ajustaForm(){ const v=$("uPapel").value==="vendedor"; $("uLoginL").firstChild.textContent=v?"Código T":"E-mail"; $("uLogin").placeholder=v?"T12345":"nome@totvs.com.br"; }
+async function abrirUsuarios(){ $("dlgUsers").showModal(); ajustaForm(); if(!$("uSenha").value) $("uSenha").value=senhaAleatoria(); await carregarUsuarios(); }
+async function carregarUsuarios(){
+  $("uTbl").innerHTML=`<tr><td style="color:var(--muted)">Carregando…</td></tr>`;
+  try{ const d=await chamarUsuarios({action:"listar"}); usuarios=d.usuarios||[]; renderUsuarios(d.eu); }
+  catch(e){ $("uTbl").innerHTML=""; uMsg(e.message,false); }
+}
+function renderUsuarios(eu){
+  const ord={dono:0,usuario:1,vendedor:2}; usuarios.sort((a,b)=>(ord[a.papel]??3)-(ord[b.papel]??3)||String(a.nome||a.email).localeCompare(String(b.nome||b.email),"pt-BR"));
+  $("uTbl").innerHTML=`<thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Último acesso</th><th>Senha</th><th></th></tr></thead><tbody>`+
+    usuarios.map((u,i)=>{ const ed=uEdit===i, eu2=(u.email||"").toLowerCase()===eu;
+      if(ed) return `<tr><td><input id="eNome" value="${esc(u.nome||"")}"></td><td>${esc(loginDe(u))}</td>
+        <td><select id="ePapel">${Object.entries(PAPEIS).map(([k,t])=>`<option value="${k}" ${u.papel===k?"selected":""}>${t}</option>`).join("")}</select>
+          <input id="eT" placeholder="Código T" value="${esc(u.codigo_t||"")}" style="margin-top:4px;width:110px"></td>
+        <td colspan="2" style="color:var(--muted);font-size:12px">Para vendedor, informe o código T.</td>
+        <td><div class="acts"><button data-u="salvar" data-i="${i}" class="primary">Salvar</button><button data-u="cancelar">Cancelar</button></div></td></tr>`;
+      return `<tr><td>${esc(u.nome||"—")}${eu2?' <span class="badge">você</span>':""}</td><td>${esc(loginDe(u))}${u.tem_login?"":' <span class="badge undo">sem login</span>'}</td>
+        <td><span class="pp ${u.papel||"nenhum"}">${u.papel?PAPEIS[u.papel]:"Sem acesso"}</span></td><td>${quando(u.ultimo_acesso)}</td>
+        <td>${u.tem_login?(u.senha_definida?"definida":'<span style="color:var(--fct)">provisória</span>'):"—"}</td>
+        <td><div class="acts">${u.papel||!u.tem_login?`<button data-u="editar" data-i="${i}">Editar</button>`:`<button data-u="liberar" data-i="${i}">Dar acesso</button>`}
+          ${u.tem_login?`<button data-u="senha" data-i="${i}">Redefinir senha</button>`:`<button data-u="criarlogin" data-i="${i}">Criar login</button>`}
+          ${eu2?"":`<button data-u="remover" data-i="${i}" class="danger">Remover</button>`}</div></td></tr>`; }).join("")+"</tbody>";
+  $("uTbl").dataset.eu=eu||"";
+}
+$("btnUsers").addEventListener("click", abrirUsuarios);
+$("uFechar").addEventListener("click", ()=>{ uEdit=null; $("dlgUsers").close(); });
+$("uPapel").addEventListener("change", ajustaForm);
+$("uGerar").addEventListener("click", ()=>{ $("uSenha").value=senhaAleatoria(); });
+$("uForm").addEventListener("submit", async e=>{
+  e.preventDefault(); const papelN=$("uPapel").value, login=$("uLogin").value.trim(), senha=$("uSenha").value.trim();
+  if(!login){ uMsg(papelN==="vendedor"?"Informe o código T.":"Informe o e-mail.",false); return; }
+  if(senha.length<8){ uMsg("A senha provisória precisa ter pelo menos 8 caracteres.",false); return; }
+  const b=$("uCriar"); b.disabled=true; b.textContent="Criando…";
+  try{ await chamarUsuarios({action:"criar", papel:papelN, nome:$("uNome").value.trim(), senha, email:papelN==="vendedor"?null:login, codigo_t:papelN==="vendedor"?login:null});
+    uMsg(`Usuário criado. Login: ${papelN==="vendedor"?login.toUpperCase().replace(/^(\d)/,"T$1"):login} · senha provisória: ${senha}`,true);
+    $("uNome").value=""; $("uLogin").value=""; $("uSenha").value=senhaAleatoria(); await carregarUsuarios();
+  }catch(err){ uMsg(err.message,false); }
+  b.disabled=false; b.textContent="Criar usuário";
+});
+$("uTbl").addEventListener("click", async e=>{
+  const bt=e.target.closest("[data-u]"); if(!bt) return; const i=+bt.dataset.i, u=usuarios[i], acao=bt.dataset.u, eu=$("uTbl").dataset.eu;
+  try{
+    if(acao==="editar"||acao==="liberar"){ uEdit=i; renderUsuarios(eu); return; }
+    if(acao==="criarlogin"){ $("uPapel").value=u.papel||"usuario"; ajustaForm(); $("uNome").value=u.nome||""; $("uLogin").value=u.papel==="vendedor"&&u.codigo_t?u.codigo_t:u.email; $("uSenha").value=senhaAleatoria();
+      uMsg("Confira os dados acima e clique em Criar usuário.",true); $("uCriar").focus(); return; }
+    if(acao==="cancelar"){ uEdit=null; renderUsuarios(eu); return; }
+    if(acao==="salvar"){ await chamarUsuarios({action:"atualizar", email:u.email, papel:$("ePapel").value, codigo_t:$("eT").value.trim(), nome:$("eNome").value.trim()});
+      uEdit=null; uMsg("Permissão atualizada.",true); await carregarUsuarios(); return; }
+    if(acao==="senha"){ const nova=prompt(`Nova senha provisória para ${loginDe(u)} (mínimo 8 caracteres):`, senhaAleatoria()); if(!nova) return;
+      await chamarUsuarios({action:"redefinir_senha", email:u.email, senha:nova}); uMsg(`Senha redefinida para ${loginDe(u)}: ${nova} (a pessoa troca no próximo acesso).`,true); await carregarUsuarios(); return; }
+    if(acao==="remover"){ if(!confirm(`Remover o acesso de ${u.nome||loginDe(u)}? O login é apagado e o acesso é bloqueado na hora. Os dados de oportunidades e metas continuam.`)) return;
+      await chamarUsuarios({action:"remover", email:u.email}); uMsg("Acesso removido.",true); await carregarUsuarios(); return; }
+  }catch(err){ uMsg(err.message,false); }
+});
 
 /* ---------- interações ---------- */
 $("exec").addEventListener("change",e=>{ state.exec=e.target.value; render(); });
@@ -421,12 +766,14 @@ document.addEventListener("change",e=>{
   render();
 });
 document.addEventListener("click",e=>{
+  const st=e.target.closest("[data-sit]"); if(st){ state.sit=st.dataset.sit; render(); return; }
+  const pv=e.target.closest("[data-pv]"); if(pv){ state.pv=pv.dataset.pv; renderProj(); return; }
   const dt=e.target.closest("[data-dt]"); if(dt){ state.dtOpen=!state.dtOpen; render(); return; }
   const ex=e.target.closest("[data-exp]"); if(ex){ const k=ex.dataset.exp; state.exp.has(k)?state.exp.delete(k):state.exp.add(k); render(); return; }
   if(state.dtOpen && !e.target.closest(".dpop")){ state.dtOpen=false; render(); }
   const h=e.target.closest("[data-h]"); if(h){ const k=h.dataset.h; state.hz = (state.hz===k || k==="tt") ? "tt" : k; render(); return; }
   const c=e.target.closest("[data-p]"); if(c){ const v=c.dataset.p;
-    if(v==="__all") state.probs.clear(); else if(v==="__clear"){ state.probs.clear(); state.meses.clear(); state.hz="tt"; } else state.probs.has(v)? state.probs.delete(v) : state.probs.add(v);
+    if(v==="__all") state.probs.clear(); else if(v==="__clear"){ state.probs.clear(); state.meses.clear(); state.hz="tt"; state.sit="and"; } else state.probs.has(v)? state.probs.delete(v) : state.probs.add(v);
     render(); return; }
   const t=e.target.closest(".tile"); if(t){ const k=t.dataset.acc; state.q=""; $("q").value=""; state.open.add(k); render();
     const r=[...document.querySelectorAll("tr.acc")].find(x=>x.dataset.a===k); if(r) r.scrollIntoView({behavior:"smooth",block:"center"}); return; }

@@ -16,23 +16,23 @@
 <style>
 :root{
   --paper:#EEF3F9; --sheet:#FFFFFF; --ink:#0D2847; --muted:#5A6B80; --line:#D2DCE8;
-  --fc:#E8590C; --fc-soft:#FDEBDD; --pp:#7C3AED; --pp-soft:#F0E9FE; --tt:#8497AE; --tt-soft:#E3E9F0;
+  --fc:#C98A12; --fc-soft:#FDF4DF; --fcb:#EED9A6; --fct:#8A5A00; --fc-on:#FFFFFF; --pp:#7C3AED; --pp-soft:#F0E9FE; --tt:#8497AE; --tt-soft:#E3E9F0;
   --warn:#B4432F; --warn-soft:#F6DED8; --band:#0A2D57; --band-ink:#FFFFFF;
-  --scc:#B7791F; --ad:#2563EB; --ad-soft:#E1EAFD; --im:#DB2777; --im-soft:#FCE4EF; --rr:#059669; --rr-soft:#D9F4EA;
+  --won:#059669; --scc:#0E7490; --ad:#2563EB; --ad-soft:#E1EAFD; --im:#DB2777; --im-soft:#FCE4EF; --rr:#059669; --rr-soft:#D9F4EA;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
-  --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
+  --fc:#E8B54A; --fc-soft:#27210F; --fcb:#5E4B17; --fct:#F2CC73; --fc-on:#27210F; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
   --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
-  --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --won:#34D399; --scc:#22D3EE; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}}
 :root[data-theme="dark"]{
   --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
-  --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
+  --fc:#E8B54A; --fc-soft:#27210F; --fcb:#5E4B17; --fct:#F2CC73; --fc-on:#27210F; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
   --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
-  --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --won:#34D399; --scc:#22D3EE; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -79,15 +79,13 @@ select,button,.upload{font:inherit;font-size:14px;color:var(--ink);background:va
 .horizons{display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:14px;margin-bottom:30px;align-items:stretch}
 .hz{font:inherit;color:var(--ink);background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;text-align:left;cursor:pointer;border-top:5px solid var(--c);transition:box-shadow .15s}
 .hz[aria-pressed="true"]{box-shadow:0 0 0 2px var(--c)}
-.hz.fc{--c:#F97316} .hz.pp{--c:var(--pp)} .hz.tt{--c:var(--tt)}
+.hz.fc{--c:var(--fc)} .hz.pp{--c:var(--pp)} .hz.tt{--c:var(--tt)}
 .hz.pp{background:var(--pp-soft);border-color:var(--pp)}
 .hz.pp .name{color:var(--pp)}
-.hz.fc{background:linear-gradient(160deg,#F97316 0%,#C2410C 100%);color:#fff;border-color:#C2410C;border-top-color:#FDBA74;padding:22px 22px 18px}
-.hz.fc .rule,.hz.fc .counts,.hz.fc .vrow span{color:rgba(255,255,255,.88)}
-.hz.fc .counts b{color:#fff}
-.hz.fc .vrow{border-top-color:rgba(255,255,255,.3)}
+.hz.fc{background:var(--fc-soft);border-color:var(--fcb);border-top-color:var(--fc);padding:22px 22px 18px}
+.hz.fc .name{color:var(--fct)}
 .hz.fc .name{font-size:22px}
-.hz.fc .tag{display:inline-block;margin-left:8px;font-size:11.5px;font-weight:650;background:#fff;color:#C2410C;border-radius:20px;padding:2px 9px;vertical-align:4px;font-stretch:100%}
+.hz.fc .tag{display:inline-block;margin-left:8px;font-size:11.5px;font-weight:650;background:var(--fc);color:var(--fc-on);border-radius:20px;padding:2px 9px;vertical-align:4px;font-stretch:100%}
 .hz .name{font-size:18px;font-weight:700;font-stretch:108%}
 .hz .rule{font-size:12.5px;color:var(--muted);margin:2px 0 14px}
 .hz .counts{font-size:13px;color:var(--muted);margin-bottom:12px}
@@ -98,9 +96,6 @@ select,button,.upload{font:inherit;font-size:14px;color:var(--ink);background:va
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
 .d-ad{background:var(--ad)} .d-im{background:var(--im)} .d-rr{background:var(--rr)} .d-scc{background:var(--scc)}
 .v-ad{color:var(--ad)} .v-im{color:var(--im)} .v-rr{color:var(--rr)} .v-scc{color:var(--scc)}
-.hz.fc .v-ad,.hz.fc .v-im,.hz.fc .v-rr,.hz.fc .v-scc{color:#fff}
-.hz.fc .dot,.xh.fc .dot{width:10px;height:10px;box-shadow:0 0 0 2px #fff}
-.hz.fc .d-ad,.xh.fc .d-ad{background:#2563EB} .hz.fc .d-im,.xh.fc .d-im{background:#DB2777} .hz.fc .d-rr,.xh.fc .d-rr{background:#059669} .hz.fc .d-scc,.xh.fc .d-scc{background:#CA8A04}
 .hz.fc .vrow b{font-size:16px}
 th.h-ad{color:var(--ad)} th.h-im{color:var(--im)} th.h-rr{color:var(--rr)} th.h-scc{color:var(--scc)}
 .fcol{background:var(--fc-soft)}
@@ -138,7 +133,7 @@ td.n,th.n{text-align:right;white-space:nowrap}
 tr.acc{cursor:pointer} tr.acc:hover td{background:var(--paper)}
 tr.det td{background:var(--paper);font-size:12.5px;color:var(--muted)}
 .pill{display:inline-block;font-size:11.5px;padding:2px 7px;border-radius:20px;background:var(--tt-soft);white-space:nowrap}
-.pill.hi{background:var(--fc-soft);color:var(--fc);font-weight:600}
+.pill.hi{background:var(--fc-soft);color:var(--fct);font-weight:600}
 .search{width:100%;max-width:320px;margin-bottom:10px;font:inherit;font-size:14px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
 footer{color:var(--muted);font-size:12.5px;margin-top:26px}
 @media (max-width:860px){.horizons{grid-template-columns:1fr}.hz.fc{order:-1}.grid2{grid-template-columns:1fr}.funnel .row{grid-template-columns:110px 1fr 90px}h1{font-size:28px}}
@@ -181,24 +176,18 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .xwho b{display:block;font-size:15px;font-weight:700;line-height:1.25}
 .xwho small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
 .xh{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--sheet);border-left:4px solid var(--c)}
-.xh.fc{--c:#FDBA74;background:linear-gradient(160deg,#F97316 0%,#C2410C 100%);border-color:#C2410C;border-left-color:#FDBA74;color:#fff}
+.xh.fc{--c:var(--fc);background:var(--fc-soft);border-color:var(--fcb);border-left-color:var(--fc)}
+.xh.fc .xt b{color:var(--fct)}
 .xh.pp{--c:var(--pp);background:var(--pp-soft);border-color:var(--pp)} .xh.tt{--c:var(--tt)}
 .xt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
 .xt b{font-size:13.5px;font-weight:700;color:var(--c)}
-.xh.fc .xt b{color:#fff}
 .xt em{font-style:normal;font-size:12px;color:var(--muted)}
-.xh.fc .xt em{color:rgba(255,255,255,.88)}
 .xv{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:2px 0}
 .xv span{display:flex;align-items:center;gap:6px;color:var(--muted)}
-.xh.fc .xv span{color:rgba(255,255,255,.9)}
 .xv strong{font-weight:700}
-.xh.fc .v-ad,.xh.fc .v-im,.xh.fc .v-rr,.xh.fc .v-scc{color:#fff}
 
 .xshare{margin-top:7px;font-size:11.5px;color:var(--muted)}
-.xh.fc .xshare{color:rgba(255,255,255,.88)}
 .xbar{height:4px;border-radius:3px;background:var(--line);margin-top:4px;overflow:hidden}
-.xh.fc .xbar{background:rgba(255,255,255,.3)}
-.xh.fc .xbar i{background:#fff}
 .xbar i{display:block;height:100%;background:var(--c)}
 @media (max-width:1000px){.xrow{grid-template-columns:1fr 1fr 1fr}.xwho{grid-column:1/-1}}
 @media (max-width:640px){.xrow{grid-template-columns:1fr}}
@@ -217,7 +206,6 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .fsum{font-size:13px;color:var(--muted);margin-left:8px}
 .fsum b{color:var(--ink)}
 .hz .hint{margin-top:10px;font-size:11.5px;color:var(--muted)}
-.hz.fc .hint{color:rgba(255,255,255,.85)}
 .hz[aria-pressed="true"] .hint{font-weight:650}
 .hz[aria-pressed="true"]{box-shadow:0 0 0 3px var(--c), 0 6px 18px rgba(0,0,0,.18)}
 
@@ -239,6 +227,64 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .dn input{width:16px;height:16px;accent-color:#2F7BEA;margin:0;cursor:pointer}
 .dn.b span{font-weight:650}
 .dn em{margin-left:auto;font-style:normal;font-size:11.5px;color:var(--muted)}
+
+/* metas */
+.mrow{display:grid;grid-template-columns:250px 1fr;gap:16px;padding:14px;border-top:1px solid var(--line)}
+.mrow:first-child{border-top:0}
+.mrow.team{background:var(--paper);border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+.mrow.team + .mrow{border-top:0}
+.mrow .xwho{align-items:flex-start}
+.mrow .xwho>div{min-width:0}
+.rank{font-size:12px;font-weight:700;color:var(--muted);width:22px;flex:none;padding-top:12px}
+.mmed{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:12px}
+.mmed.ok,.mst.ok{background:#D1FAE5;color:#065F46} .mmed.at,.mst.at{background:#FEF3C7;color:#92400E} .mmed.rk,.mst.rk{background:#FEE2E2;color:#991B1B} .mmed.sm,.mst.sm{background:var(--tt-soft);color:var(--muted)}
+.mvs{display:grid;gap:10px;min-width:0}
+.mv{display:grid;grid-template-columns:120px 1fr 290px;gap:12px;align-items:center}
+.mvl{display:flex;align-items:center;gap:7px;font-size:13.5px}
+.mvl b{font-weight:650;display:block}
+.mmeta{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+.mbar{height:12px;border-radius:6px;background:var(--line);overflow:hidden;display:flex}
+.mbar i{display:block;height:100%}
+.mr.ok{background:#059669} .mr.nm{background:var(--tt)} .mf.nm{background:repeating-linear-gradient(45deg,rgba(128,140,160,.55) 0 4px,rgba(128,140,160,.25) 4px 8px)} .fora{color:var(--muted);font-style:italic} .mr.at{background:#D97706} .mr.rk{background:#DC2626} .mr.sm{background:var(--tt)}
+.mf{background:repeating-linear-gradient(45deg,rgba(47,123,234,.55) 0 4px,rgba(47,123,234,.3) 4px 8px)}
+.mp{background:radial-gradient(circle,var(--tt) 35%,transparent 40%) 0 0/6px 6px}
+.mvt{font-size:12px;color:var(--muted);margin-top:4px} .mvt b{color:var(--ink)}
+.mvn{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}
+.mst{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap}
+.mvn small{font-size:12px;color:var(--muted)} .mvn small b{color:var(--ink);font-weight:650} .falta{color:var(--warn);font-weight:650}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mmed.ok,:root:not([data-theme="light"]) .mst.ok{background:#064E3B;color:#6EE7B7}
+ :root:not([data-theme="light"]) .mmed.at,:root:not([data-theme="light"]) .mst.at{background:#451A03;color:#FCD34D}
+ :root:not([data-theme="light"]) .mmed.rk,:root:not([data-theme="light"]) .mst.rk{background:#450A0A;color:#FCA5A5}}
+@media (max-width:1000px){.mrow{grid-template-columns:1fr}.mv{grid-template-columns:110px 1fr}.mvn{grid-column:1/-1;align-items:flex-start;text-align:left;flex-direction:row;flex-wrap:wrap;gap:8px}}
+
+/* projeções */
+:root{--c-ad:var(--ad);--c-im:var(--im);--c-rr:var(--rr);--c-scc:var(--scc)}
+.pjbox{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.pjhd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}.pjhd b{font-weight:700;font-size:14.5px}.pjhd span{font-size:12px;color:var(--muted)}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.gc{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center}
+.gc h4{margin:0 0 2px;font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
+.gbig{font-size:22px;font-weight:750;margin-top:-6px} .gsub{font-size:11.5px;color:var(--muted)}
+.gnone{font-size:12.5px;color:var(--muted);padding:26px 0 10px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:1px 8px;font-size:12px;color:var(--muted);text-align:left;margin-top:6px}.kv b{color:var(--ink);font-weight:650;text-align:right}
+.pj2{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr);gap:12px;margin-top:12px}
+.dleg{display:grid;gap:5px;font-size:12.5px;color:var(--muted)}.dleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}.dleg b{color:var(--ink)}
+.chips-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+@media (max-width:1000px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.pj2{grid-template-columns:1fr}}
+
+/* situação */
+.tile.gw{border-top-color:var(--won);background:var(--rr-soft)}
+.pill.won{background:var(--rr-soft);color:var(--won);font-weight:700}
+.chip.seg.on{background:#0E9F6E;border-color:#0E9F6E}
+
+/* usuários */
+.uform{display:grid;grid-template-columns:1.6fr 1.2fr 1.2fr 1.2fr auto;gap:10px;align-items:end;margin-bottom:10px}
+.uform label{display:grid;gap:4px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.uform input,.uform select,#uTbl input,#uTbl select{font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);min-width:0}
+.umsg{font-size:13px;min-height:1.2em;margin-bottom:8px}.umsg.ok{color:var(--won)}.umsg.err{color:var(--warn)}
+#uTbl td{vertical-align:middle}#uTbl .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}#uTbl .acts button{font-size:12.5px;padding:5px 9px}
+.pp{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px}.pp.dono{background:var(--band);color:#fff}.pp.usuario{background:var(--pp-soft);color:var(--pp)}.pp.vendedor{background:var(--fc-soft);color:var(--fct)}.pp.nenhum{background:var(--warn-soft);color:var(--warn)}
+@media (max-width:860px){.uform{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -270,7 +316,10 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
     <div class="controls">
       <label for="exec" style="position:absolute;left:-9999px">Executivo</label>
       <select id="exec"></select>
+      <button class="ghost hidden" id="btnUsers">Usuários</button>
       <button class="ghost" id="btnHist">Histórico</button>
+      <button class="ghost" id="btnMetas">Carregar metas</button>
+      <input type="file" id="fileMetas" accept=".xls,.xlsx" class="hidden">
       <button class="upload" id="btnUpload" type="button">Carregar planilhas</button>
       <input type="file" id="file" accept=".xls,.xlsx" multiple class="hidden">
       <button class="ghost" id="btnSenha">Alterar senha</button>
@@ -281,9 +330,32 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 <div class="wrap">
   <div class="msg" id="msg" style="margin-top:0" role="status"></div>
   <div class="filters" id="filters"></div>
+  <div class="horizons" id="hz"></div>
   <div id="execBoards"></div>
   <div id="dash">
-  <div class="horizons" id="hz"></div>
+  <section class="card hidden" id="metasCard" style="margin-bottom:22px">
+    <h3>Metas e atingimento</h3>
+    <div class="desc" id="metasDesc"></div>
+    <div class="legend" style="margin:0 0 12px"><span><i style="background:#059669"></i>Realizado no caminho (100%+)</span><span><i style="background:#D97706"></i>Atenção (70–99%)</span><span><i style="background:#DC2626"></i>Em risco (&lt;70%)</span><span><i style="background:repeating-linear-gradient(45deg,rgba(47,123,234,.7) 0 3px,rgba(47,123,234,.3) 3px 6px)"></i>Listrado = previsto no período</span></div>
+    <div id="metasBody"></div>
+  </section>
+  <section class="card hidden" id="projCard" style="margin-bottom:22px">
+    <h3>Projeções</h3>
+    <div class="desc">Previsto = em andamento com data prevista no período (segue o filtro de probabilidade). Ponderado = cada conta multiplicada pela sua probabilidade.</div>
+    <div class="pjbox">
+      <div class="pjhd"><b id="projTit"></b><span id="projSub"></span></div>
+      <div class="g4" id="gauges"></div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:#E24B4A"></i>até 70%</span><span><i style="background:#EF9F27"></i>70–99%</span><span><i style="background:#1D9E75"></i>100%+</span><span>ponteiro cheio = projeção (realizado + previsto) · tracejado = ponderada · escala até 150%</span></div>
+    </div>
+    <div class="pj2">
+      <div class="pjbox"><div class="pjhd"><b>De onde vem o previsto</b><span>por probabilidade</span></div><div id="donut"></div></div>
+      <div class="pjbox"><div class="pjhd"><b id="pipeTit"></b><span id="pipeCob" class="mst"></span></div>
+        <div class="chips-row" id="pipeChips"></div>
+        <svg width="100%" viewBox="0 0 560 152" style="max-height:190px;display:block" role="img" aria-label="Meta e pipeline por mês" id="pipeBars"></svg>
+        <div class="legend" style="margin-top:4px"><span><i style="background:var(--tt)"></i>meta do mês</span><span><i style="background:#2F7BEA"></i>pipeline (em andamento, todas as probabilidades)</span><span>referência saudável: 3x</span></div>
+      </div>
+    </div>
+  </section>
   <div class="grid2">
     <section class="card">
       <h3>Funil por etapa</h3>
@@ -309,7 +381,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
     <div class="tbl"><table id="accTbl"></table></div>
   </section>
   </div>
-  <footer>Forecast: fechamento no mês atual com probabilidade de 60% ou mais. Pipeline: fechamento entre o início do mês atual e o fim do segundo mês seguinte. Total: todas as oportunidades em andamento. RR = SaaS + SMS (mensalidade). SCC = serviços recorrentes. · <a href="#" id="verAjuda" style="color:inherit">Como exportar a planilha</a></footer>
+  <footer>Forecast: data prevista no mês atual (use o filtro de probabilidade para refinar). Pipeline: fechamento entre o início do mês atual e o fim do segundo mês seguinte. Total: todas as oportunidades em andamento. RR = SaaS + SMS (mensalidade). SCC = serviços recorrentes. · <a href="#" id="verAjuda" style="color:inherit">Como exportar a planilha</a></footer>
 </div>
 </div>
 
@@ -337,6 +409,47 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="ajudaNaoMostrar"> Não mostrar esta ajuda de novo</label>
   </div>
   <div class="ft"><button id="ajudaModelo" type="button">Baixar modelo em Excel</button><button id="ajudaCancelar" type="button">Cancelar</button><button class="primary" id="ajudaEscolher" type="button">Escolher arquivos</button></div>
+</dialog>
+
+<!-- USUÁRIOS -->
+<dialog class="dlg" id="dlgUsers" style="width:min(980px,96vw)">
+  <div class="hd"><h3>Usuários e permissões</h3><p>Só você (dono) vê esta tela. Todo usuário novo cria a própria senha no primeiro acesso.</p></div>
+  <div class="bd">
+    <form id="uForm" class="uform">
+      <label>Perfil<select id="uPapel"><option value="vendedor">Vendedor</option><option value="usuario">Gestor</option><option value="dono">Dono</option></select></label>
+      <label>Nome<input id="uNome" placeholder="Nome e sobrenome"></label>
+      <label id="uLoginL">Código T<input id="uLogin" placeholder="T12345" autocomplete="off"></label>
+      <label>Senha provisória<div style="display:flex;gap:6px"><input id="uSenha" autocomplete="off" style="flex:1;min-width:0"><button type="button" id="uGerar" title="Gerar senha">Gerar</button></div></label>
+      <button type="submit" class="primary" id="uCriar">Criar usuário</button>
+    </form>
+    <div style="font-size:12px;color:var(--muted);margin:-4px 0 8px">Vendedor: vê só o próprio código T. Gestor: vê tudo, sobe planilhas e metas. Dono: tudo, inclusive esta tela.</div>
+    <div id="uMsg" class="umsg" role="status"></div>
+    <div class="tbl"><table id="uTbl"></table></div>
+  </div>
+  <div class="ft"><button id="uFechar" type="button">Fechar</button></div>
+</dialog>
+
+<!-- METAS -->
+<dialog class="dlg" id="dlgMetas">
+  <div class="hd"><h3>Carregar metas</h3><p>Uma linha por vendedor por mês. O painel lê a primeira aba. Enviar de novo o mesmo vendedor e mês substitui a meta anterior.</p></div>
+  <div class="bd">
+    <div class="tbl"><table><thead><tr><th>Coluna</th><th>O que deve conter</th></tr></thead><tbody>
+      <tr><td><b style="font-weight:600">Código T</b></td><td style="color:var(--muted)">Código do vendedor, ex.: T30535</td></tr>
+      <tr><td><b style="font-weight:600">Mês</b></td><td style="color:var(--muted)">Mês da meta, ex.: 10/2026 (também aceita 01/10/2026 ou out/2026)</td></tr>
+      <tr><td><b style="font-weight:600">Meta Adesão</b></td><td style="color:var(--muted)">Meta de adesão / CDU do mês</td></tr>
+      <tr><td><b style="font-weight:600">Meta Implantação</b></td><td style="color:var(--muted)">Meta de implantação (serviços não recorrentes) do mês</td></tr>
+      <tr><td><b style="font-weight:600">Meta RR</b></td><td style="color:var(--muted)">Meta de mensalidade nova (SaaS + SMS) conquistada no mês</td></tr>
+      <tr><td><b style="font-weight:600">Meta SCC</b></td><td style="color:var(--muted)">Meta de serviços recorrentes novos conquistados no mês</td></tr>
+      <tr><td><b style="font-weight:600">Nome</b> <span class="badge">opcional</span></td><td style="color:var(--muted)">Só para facilitar a leitura; é ignorado</td></tr>
+    </tbody></table></div>
+    <p style="font-size:13px;color:var(--muted);margin:12px 0 0">O modelo já vem com os vendedores do painel e os meses até dezembro, com metas zeradas para você preencher.</p>
+  </div>
+  <div class="ft"><button id="metasModelo" type="button">Baixar modelo de metas</button><button id="metasCancelar" type="button">Cancelar</button><button class="primary" id="metasEscolher" type="button">Escolher arquivo</button></div>
+</dialog>
+<dialog class="dlg" id="dlgMetasConf">
+  <div class="hd"><h3>Confirmar metas</h3></div>
+  <div class="bd" id="metasConfBody"></div>
+  <div class="ft"><button id="metasConfCancelar" type="button">Cancelar</button><button class="primary" id="metasConfirmar" type="button">Confirmar metas</button></div>
 </dialog>
 
 <!-- SENHA -->
