@@ -206,8 +206,13 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 /* filtros */
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 16px}
 .filters .fl{font-size:13px;font-weight:650;color:var(--muted);margin-right:2px}
-.chip{font:inherit;font-size:13px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer}
-.chip.on{background:var(--band);border-color:var(--band);color:#fff;font-weight:600}
+.chip{font:inherit;font-size:13px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .12s,border-color .12s}
+.chip:hover{border-color:#2F7BEA;color:var(--ink)}
+.chip.on{background:#2F7BEA;border-color:#2F7BEA;color:#fff;font-weight:650;box-shadow:0 2px 8px rgba(47,123,234,.35)}
+.chip.on::before{content:"✓";font-weight:800}
+.chip.all.on{background:#0E9F6E;border-color:#0E9F6E;box-shadow:0 2px 8px rgba(14,159,110,.35)}
+.pcount{font-size:12.5px;color:var(--muted);margin-left:4px}
+.pcount b{color:var(--ink)}
 .chip.clear{border-color:var(--warn);color:var(--warn);background:transparent}
 .fsum{font-size:13px;color:var(--muted);margin-left:8px}
 .fsum b{color:var(--ink)}
@@ -215,6 +220,52 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .hz.fc .hint{color:rgba(255,255,255,.85)}
 .hz[aria-pressed="true"] .hint{font-weight:650}
 .hz[aria-pressed="true"]{box-shadow:0 0 0 3px var(--c), 0 6px 18px rgba(0,0,0,.18)}
+
+/* filtro de data */
+.fsep{width:1px;height:22px;background:var(--line);margin:0 6px}
+.dwrap{position:relative;display:inline-flex;align-items:center;gap:8px}
+.dbtn{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer;display:inline-flex;gap:10px;align-items:center;min-width:150px;justify-content:space-between}
+.dbtn i{font-style:normal;color:var(--muted)}
+.dbtn.on{border-color:#2F7BEA;background:#2F7BEA;color:#fff;font-weight:650}
+.dbtn.on i{color:#fff}
+.dpop{position:absolute;top:calc(100% + 6px);left:0;z-index:20;width:270px;max-height:340px;overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.25);padding:8px 6px}
+.drow{display:flex;align-items:center;gap:2px;padding:1px 0}
+.drow.l2{padding-left:20px} .drow.l3{padding-left:40px}
+.tw{font:inherit;width:22px;height:22px;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:4px;display:inline-grid;place-items:center;font-size:15px;transition:transform .12s;flex:none;padding:0}
+.tw.open{transform:rotate(90deg)} .tw.sp{cursor:default}
+.tw:not(.sp):hover{background:var(--paper)}
+.dn{display:flex;align-items:center;gap:8px;flex:1;font-size:13.5px;padding:5px 6px;border-radius:6px;cursor:pointer}
+.dn:hover{background:var(--paper)}
+.dn input{width:16px;height:16px;accent-color:#2F7BEA;margin:0;cursor:pointer}
+.dn.b span{font-weight:650}
+.dn em{margin-left:auto;font-style:normal;font-size:11.5px;color:var(--muted)}
+
+/* metas */
+.mrow{display:grid;grid-template-columns:250px 1fr;gap:16px;padding:14px;border-top:1px solid var(--line)}
+.mrow:first-child{border-top:0}
+.mrow.team{background:var(--paper);border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+.mrow.team + .mrow{border-top:0}
+.mrow .xwho{align-items:flex-start}
+.mrow .xwho>div{min-width:0}
+.rank{font-size:12px;font-weight:700;color:var(--muted);width:22px;flex:none;padding-top:12px}
+.mmed{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:12px}
+.mmed.ok,.mst.ok{background:#D1FAE5;color:#065F46} .mmed.at,.mst.at{background:#FEF3C7;color:#92400E} .mmed.rk,.mst.rk{background:#FEE2E2;color:#991B1B} .mmed.sm,.mst.sm{background:var(--tt-soft);color:var(--muted)}
+.mvs{display:grid;gap:10px;min-width:0}
+.mv{display:grid;grid-template-columns:120px 1fr 290px;gap:12px;align-items:center}
+.mvl{display:flex;align-items:center;gap:7px;font-size:13.5px}
+.mvl b{font-weight:650}
+.mbar{height:12px;border-radius:6px;background:var(--line);overflow:hidden;display:flex}
+.mbar i{display:block;height:100%}
+.mr.ok{background:#059669} .mr.at{background:#D97706} .mr.rk{background:#DC2626} .mr.sm{background:var(--tt)}
+.mf{background:repeating-linear-gradient(45deg,rgba(47,123,234,.55) 0 4px,rgba(47,123,234,.3) 4px 8px)}
+.mvt{font-size:12px;color:var(--muted);margin-top:4px} .mvt b{color:var(--ink)}
+.mvn{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}
+.mst{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:20px;white-space:nowrap}
+.mvn small{font-size:12px;color:var(--muted)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mmed.ok,:root:not([data-theme="light"]) .mst.ok{background:#064E3B;color:#6EE7B7}
+ :root:not([data-theme="light"]) .mmed.at,:root:not([data-theme="light"]) .mst.at{background:#451A03;color:#FCD34D}
+ :root:not([data-theme="light"]) .mmed.rk,:root:not([data-theme="light"]) .mst.rk{background:#450A0A;color:#FCA5A5}}
+@media (max-width:1000px){.mrow{grid-template-columns:1fr}.mv{grid-template-columns:110px 1fr}.mvn{grid-column:1/-1;align-items:flex-start;text-align:left;flex-direction:row;flex-wrap:wrap;gap:8px}}
 </style>
 </head>
 <body>
@@ -247,6 +298,8 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
       <label for="exec" style="position:absolute;left:-9999px">Executivo</label>
       <select id="exec"></select>
       <button class="ghost" id="btnHist">Histórico</button>
+      <button class="ghost" id="btnMetas">Carregar metas</button>
+      <input type="file" id="fileMetas" accept=".xls,.xlsx" class="hidden">
       <button class="upload" id="btnUpload" type="button">Carregar planilhas</button>
       <input type="file" id="file" accept=".xls,.xlsx" multiple class="hidden">
       <button class="ghost" id="btnSenha">Alterar senha</button>
@@ -260,6 +313,12 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
   <div id="execBoards"></div>
   <div id="dash">
   <div class="horizons" id="hz"></div>
+  <section class="card hidden" id="metasCard" style="margin-bottom:22px">
+    <h3>Metas e atingimento</h3>
+    <div class="desc" id="metasDesc"></div>
+    <div class="legend" style="margin:0 0 12px"><span><i style="background:#059669"></i>Realizado no caminho (100%+)</span><span><i style="background:#D97706"></i>Atenção (70–99%)</span><span><i style="background:#DC2626"></i>Em risco (&lt;70%)</span><span><i style="background:var(--line)"></i>Faixa clara = forecast do mês</span></div>
+    <div id="metasBody"></div>
+  </section>
   <div class="grid2">
     <section class="card">
       <h3>Funil por etapa</h3>
@@ -313,6 +372,29 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="ajudaNaoMostrar"> Não mostrar esta ajuda de novo</label>
   </div>
   <div class="ft"><button id="ajudaModelo" type="button">Baixar modelo em Excel</button><button id="ajudaCancelar" type="button">Cancelar</button><button class="primary" id="ajudaEscolher" type="button">Escolher arquivos</button></div>
+</dialog>
+
+<!-- METAS -->
+<dialog class="dlg" id="dlgMetas">
+  <div class="hd"><h3>Carregar metas</h3><p>Uma linha por vendedor por mês. O painel lê a primeira aba. Enviar de novo o mesmo vendedor e mês substitui a meta anterior.</p></div>
+  <div class="bd">
+    <div class="tbl"><table><thead><tr><th>Coluna</th><th>O que deve conter</th></tr></thead><tbody>
+      <tr><td><b style="font-weight:600">Código T</b></td><td style="color:var(--muted)">Código do vendedor, ex.: T30535</td></tr>
+      <tr><td><b style="font-weight:600">Mês</b></td><td style="color:var(--muted)">Mês da meta, ex.: 10/2026 (também aceita 01/10/2026 ou out/2026)</td></tr>
+      <tr><td><b style="font-weight:600">Meta Adesão</b></td><td style="color:var(--muted)">Meta de adesão / CDU do mês</td></tr>
+      <tr><td><b style="font-weight:600">Meta Implantação</b></td><td style="color:var(--muted)">Meta de implantação (serviços não recorrentes) do mês</td></tr>
+      <tr><td><b style="font-weight:600">Meta RR</b></td><td style="color:var(--muted)">Meta de mensalidade nova (SaaS + SMS) conquistada no mês</td></tr>
+      <tr><td><b style="font-weight:600">Meta SCC</b></td><td style="color:var(--muted)">Meta de serviços recorrentes novos conquistados no mês</td></tr>
+      <tr><td><b style="font-weight:600">Nome</b> <span class="badge">opcional</span></td><td style="color:var(--muted)">Só para facilitar a leitura; é ignorado</td></tr>
+    </tbody></table></div>
+    <p style="font-size:13px;color:var(--muted);margin:12px 0 0">O modelo já vem com os vendedores do painel e os meses até dezembro, com metas zeradas para você preencher.</p>
+  </div>
+  <div class="ft"><button id="metasModelo" type="button">Baixar modelo de metas</button><button id="metasCancelar" type="button">Cancelar</button><button class="primary" id="metasEscolher" type="button">Escolher arquivo</button></div>
+</dialog>
+<dialog class="dlg" id="dlgMetasConf">
+  <div class="hd"><h3>Confirmar metas</h3></div>
+  <div class="bd" id="metasConfBody"></div>
+  <div class="ft"><button id="metasConfCancelar" type="button">Cancelar</button><button class="primary" id="metasConfirmar" type="button">Confirmar metas</button></div>
 </dialog>
 
 <!-- SENHA -->
