@@ -18,7 +18,7 @@
   --paper:#EEF3F9; --sheet:#FFFFFF; --ink:#0D2847; --muted:#5A6B80; --line:#D2DCE8;
   --fc:#E8590C; --fc-soft:#FDEBDD; --pp:#7C3AED; --pp-soft:#F0E9FE; --tt:#8497AE; --tt-soft:#E3E9F0;
   --warn:#B4432F; --warn-soft:#F6DED8; --band:#0A2D57; --band-ink:#FFFFFF;
-  --ad:#2563EB; --ad-soft:#E1EAFD; --im:#DB2777; --im-soft:#FCE4EF; --rr:#059669; --rr-soft:#D9F4EA;
+  --scc:#B7791F; --ad:#2563EB; --ad-soft:#E1EAFD; --im:#DB2777; --im-soft:#FCE4EF; --rr:#059669; --rr-soft:#D9F4EA;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
@@ -26,13 +26,13 @@
   --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
   --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
   --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
-  --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}}
 :root[data-theme="dark"]{
   --paper:#0C1522; --sheet:#132033; --ink:#E4ECF6; --muted:#98A8BC; --line:#23344B;
   --fc:#FF8A3D; --fc-soft:#3A2416; --pp:#A78BFA; --pp-soft:#2A2147; --tt:#8FA2B8; --tt-soft:#1F2D3F;
   --warn:#E57B64; --warn-soft:#3C231D; --band:#06182F; --band-ink:#FFFFFF;
-  --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
+  --scc:#FACC15; --ad:#60A5FA; --ad-soft:#15294A; --im:#F472B6; --im-soft:#3B1830; --rr:#34D399; --rr-soft:#123A2C;
   --ad-on:#DBE7FF; --im-on:#FFE0EE; --rr-on:#D3F8E8;}
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -94,15 +94,15 @@ select,button,.upload{font:inherit;font-size:14px;color:var(--ink);background:va
 .hz .counts b{color:var(--ink);font-size:20px;font-weight:700;margin-right:3px}
 .vals{display:grid;gap:6px}
 .vrow{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;border-top:1px dashed var(--line);padding-top:6px}
-.vrow span{color:var(--muted);display:flex;align-items:center;gap:7px} .vrow b{font-weight:700}
+.vrow span{color:var(--muted);display:flex;align-items:center;gap:7px} .vrow b{font-weight:700;white-space:nowrap}
 .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
-.d-ad{background:var(--ad)} .d-im{background:var(--im)} .d-rr{background:var(--rr)}
-.v-ad{color:var(--ad)} .v-im{color:var(--im)} .v-rr{color:var(--rr)}
-.hz.fc .v-ad,.hz.fc .v-im,.hz.fc .v-rr{color:#fff}
+.d-ad{background:var(--ad)} .d-im{background:var(--im)} .d-rr{background:var(--rr)} .d-scc{background:var(--scc)}
+.v-ad{color:var(--ad)} .v-im{color:var(--im)} .v-rr{color:var(--rr)} .v-scc{color:var(--scc)}
+.hz.fc .v-ad,.hz.fc .v-im,.hz.fc .v-rr,.hz.fc .v-scc{color:#fff}
 .hz.fc .dot,.xh.fc .dot{width:10px;height:10px;box-shadow:0 0 0 2px #fff}
-.hz.fc .d-ad,.xh.fc .d-ad{background:#2563EB} .hz.fc .d-im,.xh.fc .d-im{background:#DB2777} .hz.fc .d-rr,.xh.fc .d-rr{background:#059669}
+.hz.fc .d-ad,.xh.fc .d-ad{background:#2563EB} .hz.fc .d-im,.xh.fc .d-im{background:#DB2777} .hz.fc .d-rr,.xh.fc .d-rr{background:#059669} .hz.fc .d-scc,.xh.fc .d-scc{background:#CA8A04}
 .hz.fc .vrow b{font-size:16px}
-th.h-ad{color:var(--ad)} th.h-im{color:var(--im)} th.h-rr{color:var(--rr)}
+th.h-ad{color:var(--ad)} th.h-im{color:var(--im)} th.h-rr{color:var(--rr)} th.h-scc{color:var(--scc)}
 .fcol{background:var(--fc-soft)}
 
 /* seções */
@@ -125,7 +125,7 @@ section.card .desc{color:var(--muted);font-size:13px;margin-bottom:14px}
 .funnel .row:hover .tip,.funnel .row:focus .tip{display:block}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
-.c-ad{background:var(--ad)} .c-im{background:var(--im)} .c-mr{background:var(--rr)}
+.c-ad{background:var(--ad)} .c-im{background:var(--im)} .c-mr{background:var(--rr)} .c-scc{background:var(--scc)}
 .alerts{list-style:none;margin:0;padding:0}
 .alerts li{border-left:3px solid var(--warn);background:var(--warn-soft);padding:9px 12px;border-radius:0 8px 8px 0;margin-bottom:8px;font-size:13.5px}
 .alerts li b{display:block;font-size:13px;color:var(--warn);margin-bottom:2px}
@@ -192,7 +192,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .xv span{display:flex;align-items:center;gap:6px;color:var(--muted)}
 .xh.fc .xv span{color:rgba(255,255,255,.9)}
 .xv strong{font-weight:700}
-.xh.fc .v-ad,.xh.fc .v-im,.xh.fc .v-rr{color:#fff}
+.xh.fc .v-ad,.xh.fc .v-im,.xh.fc .v-rr,.xh.fc .v-scc{color:#fff}
 
 .xshare{margin-top:7px;font-size:11.5px;color:var(--muted)}
 .xh.fc .xshare{color:rgba(255,255,255,.88)}
@@ -202,6 +202,19 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .xbar i{display:block;height:100%;background:var(--c)}
 @media (max-width:1000px){.xrow{grid-template-columns:1fr 1fr 1fr}.xwho{grid-column:1/-1}}
 @media (max-width:640px){.xrow{grid-template-columns:1fr}}
+
+/* filtros */
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 16px}
+.filters .fl{font-size:13px;font-weight:650;color:var(--muted);margin-right:2px}
+.chip{font:inherit;font-size:13px;padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);cursor:pointer}
+.chip.on{background:var(--band);border-color:var(--band);color:#fff;font-weight:600}
+.chip.clear{border-color:var(--warn);color:var(--warn);background:transparent}
+.fsum{font-size:13px;color:var(--muted);margin-left:8px}
+.fsum b{color:var(--ink)}
+.hz .hint{margin-top:10px;font-size:11.5px;color:var(--muted)}
+.hz.fc .hint{color:rgba(255,255,255,.85)}
+.hz[aria-pressed="true"] .hint{font-weight:650}
+.hz[aria-pressed="true"]{box-shadow:0 0 0 3px var(--c), 0 6px 18px rgba(0,0,0,.18)}
 </style>
 </head>
 <body>
@@ -243,6 +256,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 </div></div>
 <div class="wrap">
   <div class="msg" id="msg" style="margin-top:0" role="status"></div>
+  <div class="filters" id="filters"></div>
   <div id="execBoards"></div>
   <div id="dash">
   <div class="horizons" id="hz"></div>
@@ -251,7 +265,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
       <h3>Funil por etapa</h3>
       <div class="desc" id="funnelDesc"></div>
       <div class="funnel" id="funnel"></div>
-      <div class="legend"><span><i class="c-ad"></i>Adesão (CDU)</span><span><i class="c-im"></i>Implantação (serviços)</span><span><i class="c-mr"></i>RR (mensalidade: SaaS + SMS)</span></div>
+      <div class="legend"><span><i class="c-ad"></i>Adesão (CDU)</span><span><i class="c-im"></i>Implantação (serviços)</span><span><i class="c-mr"></i>RR (mensalidade: SaaS + SMS)</span><span><i class="c-scc"></i>SCC (serviços recorrentes)</span></div>
     </section>
     <section class="card">
       <h3>Pontos de atenção</h3>
@@ -261,7 +275,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
   </div>
   <section class="card" style="margin-bottom:22px">
     <h3>Por executivo</h3>
-    <div class="desc">Forecast, pipeline e total de cada executivo, sem depender do filtro acima.</div>
+    <div class="desc">Forecast, pipeline e total de cada executivo. Respeita o filtro de probabilidade.</div>
     <div id="execList"></div>
   </section>
   <section class="card" style="margin-bottom:22px">
@@ -271,7 +285,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
     <div class="tbl"><table id="accTbl"></table></div>
   </section>
   </div>
-  <footer>Forecast: fechamento no mês atual com probabilidade de 60% ou mais. Pipeline: fechamento entre o início do mês atual e o fim do segundo mês seguinte. Total: todas as oportunidades em andamento. RR = SaaS + SMS (mensalidade). · <a href="#" id="verAjuda" style="color:inherit">Como exportar a planilha</a></footer>
+  <footer>Forecast: fechamento no mês atual com probabilidade de 60% ou mais. Pipeline: fechamento entre o início do mês atual e o fim do segundo mês seguinte. Total: todas as oportunidades em andamento. RR = SaaS + SMS (mensalidade). SCC = serviços recorrentes. · <a href="#" id="verAjuda" style="color:inherit">Como exportar a planilha</a></footer>
 </div>
 </div>
 

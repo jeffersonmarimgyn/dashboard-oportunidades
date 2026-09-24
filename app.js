@@ -3,6 +3,11 @@ const CFG = window.APP_CONFIG || {};
 const db = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY);
 
 const REQUIRED = ["Código","Nome da conta","Tipo de oportunidade","Etapa","Probabilidade","Data prevista (dias)","Responsável","Valor SAAS","Valor CDU/Adesão","Valor SMS","Valor Serviços Não Recorrentes"];
+const OPCIONAIS = ["Descrição","Valor Serviços Recorrentes"];
+const ALIAS = { "valor scc":"Valor Serviços Recorrentes", "scc":"Valor Serviços Recorrentes", "valor saas":"Valor SAAS" };
+const normH = s => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\bde\b/g," ").replace(/[^a-z0-9%()/]+/g," ").replace(/\s+/g," ").trim();
+const CANON = {}; REQUIRED.concat(OPCIONAIS).forEach(c=>CANON[normH(c)]=c); Object.entries(ALIAS).forEach(([k,v])=>CANON[normH(k)]=v);
+const canonRow = r => { const o={}; for(const k in r){ const c=CANON[normH(k)]||k; if(!(c in o) || o[c]==null) o[c]=r[k]; } return o; };
 const MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const TODAY = new Date();
 const CUR = TODAY.getFullYear()*12 + TODAY.getMonth();
@@ -11,7 +16,9 @@ const $ = id => document.getElementById(id);
 let rows = [], ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
 const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
 const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
-let state = { hz:"pp", exec:"__all", q:"", open:new Set() };
+let state = { hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set() };
+const pKey = o => o.p==null? "s" : String(o.p);
+const pOk = o => !state.probs.size || state.probs.has(pKey(o));
 
 /* ---------- utilitários ---------- */
 const num = v => { if(v==null||v==="") return 0; if(typeof v==="number") return isFinite(v)?v:0;
@@ -32,7 +39,7 @@ const brl = v => { const a=Math.abs(v);
   return "R$ "+v.toLocaleString("pt-BR",{maximumFractionDigits:0}); };
 const full = v => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const sum = (a,k) => a.reduce((s,o)=>s+o[k],0);
-const agg = a => ({n:a.length, contas:new Set(a.map(o=>o.acc)).size, ad:sum(a,"ad"), im:sum(a,"im"), mrr:sum(a,"mrr")});
+const agg = a => ({n:a.length, contas:new Set(a.map(o=>o.acc)).size, ad:sum(a,"ad"), im:sum(a,"im"), mrr:sum(a,"mrr"), scc:sum(a,"scc")});
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const dt = s => new Date(s).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
 const say = (t,ok) => { const m=$("msg"); m.textContent=t; m.className="msg "+(ok?"ok":"err"); if(ok) setTimeout(()=>{ if(m.textContent===t) m.className="msg"; },6000); };
@@ -43,7 +50,7 @@ function toView(r){
   const o = { code:String(r.codigo??""), desc:r.descricao||"", acc:String(r.conta||"Sem conta").trim(), tipo:r.tipo||"",
     etapa:String(r.etapa||"Sem etapa").trim(), p: r.probabilidade==null? null : Number(r.probabilidade), d,
     mi: d? d.getFullYear()*12+d.getMonth() : null, exec:r.executivo, cargaEm:r.carga_em,
-    saas:Number(r.valor_saas)||0, sms:Number(r.valor_sms)||0, ad:Number(r.valor_cdu)||0, im:Number(r.valor_servicos)||0 };
+    saas:Number(r.valor_saas)||0, sms:Number(r.valor_sms)||0, ad:Number(r.valor_cdu)||0, im:Number(r.valor_servicos)||0, scc:Number(r.valor_scc)||0 };
   o.mrr = o.saas + o.sms;
   o.fc = o.mi===CUR && o.p!=null && o.p>=60;
   o.pp = o.mi!=null && o.mi>=CUR && o.mi<=CUR+2;
@@ -55,7 +62,7 @@ function fromSheet(r){
     conta:String(r["Nome da conta"]||"").trim()||"Sem conta", tipo:r["Tipo de oportunidade"]||null, etapa:r["Etapa"]? String(r["Etapa"]).trim():null,
     probabilidade:prob(r["Probabilidade"]), data_prevista:iso(parseDate(r["Data prevista (dias)"])),
     executivo:String(r["Responsável"]||"").trim()||"Sem responsável",
-    valor_saas:num(r["Valor SAAS"]), valor_cdu:num(r["Valor CDU/Adesão"]), valor_sms:num(r["Valor SMS"]), valor_servicos:num(r["Valor Serviços Não Recorrentes"]) };
+    valor_saas:num(r["Valor SAAS"]), valor_cdu:num(r["Valor CDU/Adesão"]), valor_sms:num(r["Valor SMS"]), valor_servicos:num(r["Valor Serviços Não Recorrentes"]), valor_scc:num(r["Valor Serviços Recorrentes"]) };
 }
 
 /* ---------- autenticação ---------- */
@@ -144,13 +151,13 @@ function erroAmigavel(err){
 $("file").addEventListener("change", async e=>{
   const files=[...e.target.files]; e.target.value=""; if(!files.length) return;
   try{
-    const porArquivo=[]; let linhas=[];
+    const porArquivo=[], semScc=[]; let linhas=[];
     for(const f of files){
       const buf = await f.arrayBuffer();
       const wb = XLSX.read(buf,{type:"array",cellDates:true});
-      const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null});
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null}).map(canonRow);
       if(!raw.length) throw new Error(`A planilha ${f.name} está vazia.`);
-      const miss = REQUIRED.filter(c=>!Object.keys(raw[0]).includes(c));
+      const cols = new Set(raw.flatMap(r=>Object.keys(r))); const miss = REQUIRED.filter(c=>!cols.has(c)); if(!cols.has("Valor Serviços Recorrentes")) semScc.push(f.name);
       if(miss.length) throw new Error(`A planilha ${f.name} não tem as colunas: ${miss.join(", ")}. Use o mesmo modelo exportado do CRM.`);
       const l = raw.map(fromSheet).filter(x=>x.codigo);
       porArquivo.push({ nome:f.name, qtd:l.length }); linhas.push(...l);
@@ -166,6 +173,7 @@ $("file").addEventListener("change", async e=>{
     $("cargaBody").innerHTML =
       `<ul class="files">${porArquivo.map(a=>`<li>${esc(a.nome)}: ${a.qtd} oportunidades</li>`).join("")}</ul>`+
       (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. Você só pode atualizar a carteira do código ${meuT}.</p>`:"")+
+      (semScc.length?`<p style="font-size:13px;color:var(--muted)">Sem a coluna "Valor Serviços Recorrentes" (SCC): ${semScc.map(esc).join(", ")}. O SCC dessas oportunidades fica zerado.</p>`:"")+
       (dup?`<p style="font-size:13px;color:var(--muted)">${dup} oportunidade(s) repetida(s) entre arquivos foram consideradas uma vez só.</p>`:"")+
       `<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Depois da carga</th><th class="n">Contas</th></tr></thead><tbody>`+
       execs.map(x=>{ const hoje=rows.filter(o=>o.exec===x).length, nov=linhas.filter(l=>l.executivo===x);
@@ -197,9 +205,10 @@ const AJUDA = [
   ["Valor SMS","Mensalidade SMS (entra no RR)"],
   ["Valor CDU/Adesão","Valor de adesão / CDU (não recorrente)"],
   ["Valor Serviços Não Recorrentes","Valor de implantação / serviços"],
+  ["Valor Serviços Recorrentes","SCC: serviços recorrentes mensais (se não vier, fica zerado)"],
   ["Descrição","Opcional: descrição da oportunidade"]
 ];
-$("ajudaCols").innerHTML = AJUDA.map(([c,d])=>`<tr><td style="white-space:nowrap"><b style="font-weight:600">${esc(c)}</b>${c==="Descrição"?' <span class="badge">opcional</span>':""}</td><td style="color:var(--muted)">${esc(d)}</td></tr>`).join("");
+$("ajudaCols").innerHTML = AJUDA.map(([c,d])=>`<tr><td style="white-space:nowrap"><b style="font-weight:600">${esc(c)}</b>${OPCIONAIS.includes(c)?' <span class="badge">opcional</span>':""}</td><td style="color:var(--muted)">${esc(d)}</td></tr>`).join("");
 const pularAjuda = () => { try{ return localStorage.getItem("opp-ajuda-upload")==="nao"; }catch(e){ return false; } };
 $("btnUpload").addEventListener("click", ()=>{ if(pularAjuda()) $("file").click(); else { $("ajudaNaoMostrar").checked=false; $("dlgAjuda").showModal(); } });
 $("verAjuda").addEventListener("click", e=>{ e.preventDefault(); $("ajudaNaoMostrar").checked=false; $("dlgAjuda").showModal(); });
@@ -209,8 +218,8 @@ $("ajudaEscolher").addEventListener("click", ()=>{
   $("dlgAjuda").close(); $("file").click();
 });
 $("ajudaModelo").addEventListener("click", ()=>{
-  const cab = REQUIRED.concat(["Descrição"]);
-  const ex = ["123456","EMPRESA EXEMPLO LTDA","Software","5. Propostas","30%","31/12/2026","JOSE DA SILVA (T12345)",1500,20000,800,35000,"Exemplo de oportunidade"];
+  const cab = REQUIRED.concat(["Valor Serviços Recorrentes","Descrição"]);
+  const ex = ["123456","EMPRESA EXEMPLO LTDA","Software","5. Propostas","30%","31/12/2026","JOSE DA SILVA (T12345)",1500,20000,800,35000,1200,"Exemplo de oportunidade"];
   const ws = XLSX.utils.aoa_to_sheet([cab, ex]); ws["!cols"]=cab.map(c=>({wch:Math.max(14,c.length+2)}));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Oportunidades");
   XLSX.writeFile(wb, "modelo-oportunidades.xlsx");
@@ -253,7 +262,7 @@ const HZ = {
   pp:{name:"Pipeline", rule:"Mês atual e os dois seguintes", f:o=>o.pp},
   tt:{name:"Total", rule:"Todas as oportunidades em andamento", f:()=>true}
 };
-const scoped = () => rows.filter(o=>state.exec==="__all"||o.exec===state.exec);
+const scoped = () => rows.filter(o=>(state.exec==="__all"||o.exec===state.exec) && pOk(o));
 const inHz = () => scoped().filter(HZ[state.hz].f);
 const topEtapa = v => v.map(o=>o.etapa).sort((x,y)=>y.localeCompare(x,"pt-BR",{numeric:true}))[0];
 
@@ -269,10 +278,20 @@ function render(){
   }
   $("dash").classList.remove("hidden");
 
-  // quadro por executivo
+  // barra de filtros
+  const pvals=[...new Set(rows.map(pKey))].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b);
+  const hzAtivo = state.hz!=="tt";
+  $("filters").innerHTML = `<span class="fl">Probabilidade</span>
+    <button class="chip ${state.probs.size?"":"on"}" data-p="__all">Todas</button>`+
+    pvals.map(v=>`<button class="chip ${state.probs.has(v)?"on":""}" data-p="${v}">${v==="s"?"Sem probabilidade":v+"%"}</button>`).join("")+
+    (hzAtivo||state.probs.size? `<span class="fsum">Mostrando: <b>${hzAtivo?HZ[state.hz].name:"Todas"}</b>${state.probs.size?` · ${[...state.probs].map(v=>v==="s"?"sem prob.":v+"%").join(", ")}`:""}</span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
+
+  // quadro por executivo (respeita horizonte e probabilidade)
+  const vis=base.filter(HZ[state.hz].f);
   const rk=v=>v.some(o=>o.fc)?0:v.some(o=>o.pp)?1:2;
-  $("execBoards").innerHTML=[...new Set(base.map(o=>o.exec))].sort((a,b)=>nm(a).localeCompare(nm(b),"pt-BR")).map(e=>{
-    const a=base.filter(o=>o.exec===e), m={}; a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});
+  if(!vis.length){ $("execBoards").innerHTML=`<div class="empty"><b>Nenhuma conta com estes filtros</b>Clique de novo no card selecionado ou em "Limpar filtros" para voltar a ver todas.</div>`; }
+  else $("execBoards").innerHTML=[...new Set(vis.map(o=>o.exec))].sort((a,b)=>nm(a).localeCompare(nm(b),"pt-BR")).map(e=>{
+    const a=vis.filter(o=>o.exec===e), m={}; a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});
     const list=Object.entries(m).sort((x,y)=>rk(x[1])-rk(y[1])||x[0].localeCompare(y[0],"pt-BR"));
     return `<div class="board"><h2>Executivo: ${esc(nm(e))}<small>${list.length} contas em aberto · ${a.length} oportunidades</small></h2>
       <div class="meta">Atualizado em ${a[0].cargaEm? dt(a[0].cargaEm):"—"}</div>
@@ -286,33 +305,36 @@ function render(){
       <div class="counts"><b>${s.n}</b>oportunidades &nbsp; <b>${s.contas}</b>contas${k==="fc"&&won?` &nbsp;· ${won} ganha(s)`:""}</div>
       <div class="vals"><div class="vrow"><span><i class="dot d-ad"></i>Adesão (CDU)</span><b class="v-ad" title="${full(s.ad)}">${brl(s.ad)}</b></div>
       <div class="vrow"><span><i class="dot d-im"></i>Implantação (serviços)</span><b class="v-im" title="${full(s.im)}">${brl(s.im)}</b></div>
-      <div class="vrow"><span><i class="dot d-rr"></i>RR (mensal)</span><b class="v-rr" title="${full(s.mrr)}">${brl(s.mrr)}</b></div></div></button>`}).join("");
+      <div class="vrow"><span><i class="dot d-rr"></i>RR (mensal)</span><b class="v-rr" title="${full(s.mrr)}">${brl(s.mrr)}</b></div>
+      <div class="vrow"><span><i class="dot d-scc"></i>SCC (serv. recorrentes)</span><b class="v-scc" title="${full(s.scc)}">${brl(s.scc)}</b></div></div>
+      <div class="hint">${state.hz===k? (k==="tt"?"Mostrando todas":"Filtro ativo · clique para ver todas") : "Clique para filtrar"}</div></button>`}).join("");
 
   const cur=inHz(), hn=HZ[state.hz].name;
 
   // funil
   $("funnelDesc").textContent=`${hn}: ${cur.length} oportunidades por etapa.`;
   const etapas=[...new Set(rows.map(o=>o.etapa))].sort((a,b)=>a.localeCompare(b,"pt-BR",{numeric:true}));
-  const fmax=Math.max(1,...etapas.map(e=>{const a=cur.filter(o=>o.etapa===e);return sum(a,"ad")+sum(a,"im")+sum(a,"mrr")}));
-  $("funnel").innerHTML=`<div class="row head"><div>Etapa</div><div></div><div>Adesão + Impl.<br>RR (mensal)</div></div>`+etapas.map(e=>{
-    const a=cur.filter(o=>o.etapa===e), ad=sum(a,"ad"), im=sum(a,"im"), rr=sum(a,"mrr");
+  const fmax=Math.max(1,...etapas.map(e=>{const a=cur.filter(o=>o.etapa===e);return sum(a,"ad")+sum(a,"im")+sum(a,"mrr")+sum(a,"scc")}));
+  $("funnel").innerHTML=`<div class="row head"><div>Etapa</div><div></div><div>Adesão + Impl.<br>RR · SCC</div></div>`+etapas.map(e=>{
+    const a=cur.filter(o=>o.etapa===e), ad=sum(a,"ad"), im=sum(a,"im"), rr=sum(a,"mrr"), sc=sum(a,"scc");
     return `<div class="row" tabindex="0"><div>${esc(e)} <span style="color:var(--muted)">(${a.length})</span></div>
-    <div class="track"><i class="c-ad" style="width:${ad/fmax*100}%"></i><i class="c-im" style="width:${im/fmax*100}%"></i><i class="c-mr" style="width:${rr/fmax*100}%"></i></div>
-    <div style="text-align:right">${brl(ad+im)}<br><small class="v-rr">RR ${brl(rr)}</small></div>
+    <div class="track"><i class="c-ad" style="width:${ad/fmax*100}%"></i><i class="c-im" style="width:${im/fmax*100}%"></i><i class="c-mr" style="width:${rr/fmax*100}%"></i><i class="c-scc" style="width:${sc/fmax*100}%"></i></div>
+    <div style="text-align:right">${brl(ad+im)}<br><small><span class="v-rr">RR ${brl(rr)}</span> · <span class="v-scc">SCC ${brl(sc)}</span></small></div>
     <div class="tip" role="tooltip"><b>${esc(e)}</b><span>${a.length} ${a.length===1?"oportunidade":"oportunidades"} · ${new Set(a.map(o=>o.acc)).size} contas</span>
       <div class="tl"><i class="c-ad"></i>Adesão (CDU)<em>${full(ad)}</em></div>
       <div class="tl"><i class="c-im"></i>Implantação (serviços)<em>${full(im)}</em></div>
       <div class="tl sep">Adesão + Implantação<em>${full(ad+im)}</em></div>
-      <div class="tl"><i class="c-mr"></i>RR (mensalidade)<em>${full(rr)}</em></div></div></div>`}).join("");
+      <div class="tl"><i class="c-mr"></i>RR (mensalidade)<em>${full(rr)}</em></div>
+      <div class="tl"><i class="c-scc"></i>SCC (serviços recorrentes)<em>${full(sc)}</em></div></div></div>`}).join("");
 
   // alertas
-  const al=[], grp=a=>{const m={};a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});return Object.entries(m).map(([k,v])=>`${esc(title(k))} (${v.length})`).join(", ")};
-  const a1=base.filter(o=>o.mi===CUR&&!o.fc); if(a1.length) al.push(["Fecham este mês, mas estão fora do forecast (abaixo de 60%)", `${grp(a1)} · ${brl(sum(a1,"ad")+sum(a1,"im"))} + RR ${brl(sum(a1,"mrr"))}`]);
-  const a2=base.filter(o=>/^\s*[67]\./.test(o.etapa)&&o.p!=null&&o.p<=30); if(a2.length) al.push(["Negociação ou fechamento com probabilidade de 30% ou menos", grp(a2)]);
-  const a3=base.filter(o=>o.p==null); if(a3.length) al.push(["Sem probabilidade preenchida", grp(a3)]);
-  const a4=base.filter(o=>o.mi!=null&&o.mi<CUR); if(a4.length) al.push(["Data prevista já vencida", grp(a4)]);
-  const a5=base.filter(o=>o.mi==null); if(a5.length) al.push(["Sem data prevista", grp(a5)]);
-  const a6=base.filter(o=>o.ad+o.im+o.mrr===0); if(a6.length) al.push(["Oportunidades sem valor", grp(a6)]);
+  const B=cur; const al=[], grp=a=>{const m={};a.forEach(o=>{(m[o.acc]=m[o.acc]||[]).push(o)});return Object.entries(m).map(([k,v])=>`${esc(title(k))} (${v.length})`).join(", ")};
+  const a1=B.filter(o=>o.mi===CUR&&!o.fc); if(a1.length) al.push(["Fecham este mês, mas estão fora do forecast (abaixo de 60%)", `${grp(a1)} · ${brl(sum(a1,"ad")+sum(a1,"im"))} + RR ${brl(sum(a1,"mrr"))} + SCC ${brl(sum(a1,"scc"))}`]);
+  const a2=B.filter(o=>/^\s*[67]\./.test(o.etapa)&&o.p!=null&&o.p<=30); if(a2.length) al.push(["Negociação ou fechamento com probabilidade de 30% ou menos", grp(a2)]);
+  const a3=B.filter(o=>o.p==null); if(a3.length) al.push(["Sem probabilidade preenchida", grp(a3)]);
+  const a4=B.filter(o=>o.mi!=null&&o.mi<CUR); if(a4.length) al.push(["Data prevista já vencida", grp(a4)]);
+  const a5=B.filter(o=>o.mi==null); if(a5.length) al.push(["Sem data prevista", grp(a5)]);
+  const a6=B.filter(o=>o.ad+o.im+o.mrr+o.scc===0); if(a6.length) al.push(["Oportunidades sem valor", grp(a6)]);
   $("alerts").innerHTML= al.length? al.map(([t,d])=>`<li><b>${t}</b>${d}</li>`).join("") : `<li class="ok"><b>Nada a corrigir</b>Todas as oportunidades estão consistentes.</li>`;
 
   // executivos: um bloco por executivo com os três horizontes
@@ -321,32 +343,37 @@ function render(){
       <div class="xv"><span><i class="dot d-ad"></i>Adesão</span><strong class="v-ad" title="${full(s.ad)}">${brl(s.ad)}</strong></div>
       <div class="xv"><span><i class="dot d-im"></i>Implantação</span><strong class="v-im" title="${full(s.im)}">${brl(s.im)}</strong></div>
       <div class="xv"><span><i class="dot d-rr"></i>RR mensal</span><strong class="v-rr" title="${full(s.mrr)}">${brl(s.mrr)}</strong></div>
+      <div class="xv"><span><i class="dot d-scc"></i>SCC</span><strong class="v-scc" title="${full(s.scc)}">${brl(s.scc)}</strong></div>
       ${ref?`<div class="xshare">${pct==null?"—":pct+"%"} ${refLabel}<div class="xbar"><i style="width:${Math.min(100,pct||0)}%"></i></div></div>`:""}</div>`; };
   const ini=e=>{const p=execName(e).split(/\s+/).filter(w=>w.length>2);return ((p[0]||"?")[0]+((p[1]||"")[0]||"")).toUpperCase()};
   const xrow=(label,sub,a,cls,avatar)=>{ const pp=a.filter(o=>o.pp);
     return `<div class="xrow ${cls||""}"><div class="xwho"><span class="av">${avatar}</span><div><b>${esc(label)}</b><small>${sub}</small></div></div>
       ${blk("fc",a.filter(o=>o.fc),pp,"do pipeline (adesão + impl.)")}${blk("pp",pp,a,"do total (adesão + impl.)")}${blk("tt",a)}</div>`; };
-  const ordem=[...execs].sort((x,y)=>{const f=e=>{const a=rows.filter(o=>o.exec===e);return [sum(a.filter(o=>o.fc),"ad")+sum(a.filter(o=>o.fc),"im"), sum(a.filter(o=>o.pp),"ad")+sum(a.filter(o=>o.pp),"im")]};const A=f(x),B=f(y);return B[0]-A[0]||B[1]-A[1]});
-  $("execList").innerHTML=(execs.length>1? xrow(`Time (${execs.length} executivos)`, `${new Set(rows.map(o=>o.acc)).size} contas · ${rows.length} oportunidades`, rows, "team", "∑") : "")+
-    ordem.map(e=>{const a=rows.filter(o=>o.exec===e);return xrow(nm(e), `${new Set(a.map(o=>o.acc)).size} contas · ${a.length} oportunidades`, a, "", ini(e))}).join("");
+  const rowsP=rows.filter(pOk);
+  const ordem=[...execs].sort((x,y)=>{const f=e=>{const a=rowsP.filter(o=>o.exec===e);return [sum(a.filter(o=>o.fc),"ad")+sum(a.filter(o=>o.fc),"im"), sum(a.filter(o=>o.pp),"ad")+sum(a.filter(o=>o.pp),"im")]};const A=f(x),B=f(y);return B[0]-A[0]||B[1]-A[1]});
+  $("execList").innerHTML=(execs.length>1? xrow(`Time (${execs.length} executivos)`, `${new Set(rowsP.map(o=>o.acc)).size} contas · ${rowsP.length} oportunidades`, rowsP, "team", "∑") : "")+
+    ordem.map(e=>{const a=rowsP.filter(o=>o.exec===e);return xrow(nm(e), `${new Set(a.map(o=>o.acc)).size} contas · ${a.length} oportunidades`, a, "", ini(e))}).join("");
 
   // contas
   const q=state.q.toLowerCase(), byAcc={}; cur.forEach(o=>{(byAcc[o.acc]=byAcc[o.acc]||[]).push(o)});
-  const peso=v=>sum(v,"ad")+sum(v,"im")+sum(v,"mrr");
+  const peso=v=>sum(v,"ad")+sum(v,"im")+sum(v,"mrr")+sum(v,"scc");
   const accs=Object.entries(byAcc).filter(([k,v])=>!q||k.toLowerCase().includes(q)||v.some(o=>o.code.includes(q))).sort((a,b)=>peso(b[1])-peso(a[1]));
-  $("accTbl").innerHTML=`<thead><tr><th>Conta</th><th class="n">Opp</th><th>Etapa mais avançada</th><th>Fechamento</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th></tr></thead><tbody>`+
+  $("accTbl").innerHTML=`<thead><tr><th>Conta</th><th class="n">Opp</th><th>Etapa mais avançada</th><th>Fechamento</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th><th class="n h-scc">SCC</th></tr></thead><tbody>`+
    (accs.length? accs.map(([k,v])=>{ const dmin=v.filter(o=>o.d).map(o=>o.d).sort((a,b)=>a-b)[0], open=state.open.has(k);
-     let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b></td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n v-ad">${brl(sum(v,"ad"))}</td><td class="n v-im">${brl(sum(v,"im"))}</td><td class="n v-rr">${brl(sum(v,"mrr"))}</td></tr>`;
-     if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n"><span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span></td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td></tr>`).join("");
-     return h; }).join("") : `<tr><td colspan="7" style="color:var(--muted)">Nenhuma conta neste horizonte${q?" com essa busca":""}.</td></tr>`)+"</tbody>";
+     let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b></td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n v-ad">${brl(sum(v,"ad"))}</td><td class="n v-im">${brl(sum(v,"im"))}</td><td class="n v-rr">${brl(sum(v,"mrr"))}</td><td class="n v-scc">${brl(sum(v,"scc"))}</td></tr>`;
+     if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n"><span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span></td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td><td class="n">${full(o.scc)}</td></tr>`).join("");
+     return h; }).join("") : `<tr><td colspan="8" style="color:var(--muted)">Nenhuma conta com estes filtros${q?" com essa busca":""}.</td></tr>`)+"</tbody>";
 }
 
 /* ---------- interações ---------- */
 $("exec").addEventListener("change",e=>{ state.exec=e.target.value; render(); });
 $("q").addEventListener("input",e=>{ state.q=e.target.value; render(); $("q").focus(); });
 document.addEventListener("click",e=>{
-  const h=e.target.closest("[data-h]"); if(h){ state.hz=h.dataset.h; render(); return; }
-  const t=e.target.closest(".tile"); if(t){ const k=t.dataset.acc; state.hz="tt"; state.q=""; $("q").value=""; state.open.add(k); render();
+  const h=e.target.closest("[data-h]"); if(h){ const k=h.dataset.h; state.hz = (state.hz===k || k==="tt") ? "tt" : k; render(); return; }
+  const c=e.target.closest("[data-p]"); if(c){ const v=c.dataset.p;
+    if(v==="__all") state.probs.clear(); else if(v==="__clear"){ state.probs.clear(); state.hz="tt"; } else state.probs.has(v)? state.probs.delete(v) : state.probs.add(v);
+    render(); return; }
+  const t=e.target.closest(".tile"); if(t){ const k=t.dataset.acc; state.q=""; $("q").value=""; state.open.add(k); render();
     const r=[...document.querySelectorAll("tr.acc")].find(x=>x.dataset.a===k); if(r) r.scrollIntoView({behavior:"smooth",block:"center"}); return; }
   const a=e.target.closest("tr.acc"); if(a){ const k=a.dataset.a; state.open.has(k)?state.open.delete(k):state.open.add(k); render(); }
 });
