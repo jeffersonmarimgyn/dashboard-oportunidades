@@ -89,7 +89,7 @@ async function entrar(){
   const vend = papel==="vendedor";
   $("limparBox").classList.toggle("hidden", papel!=="dono");
   $("btnHist").classList.toggle("hidden", vend);
-  $("btnMetas").classList.toggle("hidden", vend);
+  $("btnMetas").classList.remove("hidden");   // vendedor também carrega as próprias metas
   $("btnUsers").classList.toggle("hidden", papel!=="dono");
   $("exec").classList.toggle("hidden", vend);
   $("histAviso").textContent = papel==="dono" ? "Desfazer uma carga faz os executivos dela voltarem para a carga anterior." : "Registro de todas as cargas feitas no painel.";
@@ -638,7 +638,32 @@ function parseMes(v){
   return `${y}-${String(m).padStart(2,"0")}-01`;
 }
 let metasPend=null;
-function abrirAjudaMetas(){ $("dlgMetas").showModal(); }
+function promptIA(){
+  const cod = papel==="vendedor" ? meuT : "SEU CÓDIGO T (ex.: T12345)";
+  return `Vou te enviar (1) um print das minhas metas tirado do BI e (2) uma planilha modelo em Excel.
+Preencha a planilha modelo com as minhas metas e me devolva o arquivo .xlsx pronto para download.
+
+Regras:
+- Mantenha exatamente estes cabeçalhos na primeira linha, na primeira aba: Código T | Nome | Mês | Meta Adesão | Meta Implantação | Meta RR | Meta SCC
+- Uma linha por mês que aparece no print. Coluna Mês no formato MM/AAAA (ex.: 10/2026).
+- Código T em todas as linhas: ${cod}
+- Use a linha "ESN" do print (ignore as linhas de percentual, como ESNxGSN).
+- Meta Adesão = tabela "Metas NRR (CDU)".
+- Meta Implantação = tabela "Metas NRR (SERVIÇOS)".
+- Meta RR = tabela "Metas RR (SAAS - SMS - SAASSR)".
+- Meta SCC = tabela de SCC / serviços recorrentes, se existir; se não existir, preencha 0.
+- Valores como número, sem "R$" e sem casas decimais (ex.: 25015).
+- Não invente meses nem valores. Se algum valor estiver cortado ou ilegível no print, me avise antes de gerar o arquivo.
+- No final, me mostre a soma de cada coluna para eu conferir com o total do BI.`;
+}
+function abrirAjudaMetas(){
+  const v=papel==="vendedor";
+  $("metasPrompt").value=promptIA();
+  $("metasIntro").textContent = v ? `Você pode carregar as suas próprias metas (código ${meuT}). O sistema confere o código T do seu login e recusa metas de outros códigos.`
+                                  : "Uma linha por vendedor por mês. O painel lê a primeira aba. Enviar de novo o mesmo vendedor e mês substitui a meta anterior.";
+  $("dlgMetas").showModal();
+}
+$("metasCopiar").addEventListener("click", async ()=>{ try{ await navigator.clipboard.writeText($("metasPrompt").value); $("metasCopiar").textContent="Copiado ✓"; setTimeout(()=>$("metasCopiar").textContent="Copiar texto",2000); }catch(e){ $("metasPrompt").select(); } });
 $("btnMetas").addEventListener("click", abrirAjudaMetas);
 $("metasCancelar").addEventListener("click", ()=>$("dlgMetas").close());
 $("metasEscolher").addEventListener("click", ()=>{ $("dlgMetas").close(); $("fileMetas").click(); });
@@ -646,10 +671,13 @@ $("metasModelo").addEventListener("click", ()=>{
   const cods=[...new Set(rows.concat(ganhas).map(o=>codigoT(o.exec)).filter(Boolean))].sort();
   const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c&&!nomeDe[c]) nomeDe[c]=nm(o.exec); });
   const linhas=[["Código T","Nome","Mês","Meta Adesão","Meta Implantação","Meta RR","Meta SCC"]];
-  const lista=cods.length?cods:["T12345"];
-  lista.forEach(c=>{ for(let mi=CUR; mi<=Math.floor(CUR/12)*12+11; mi++) linhas.push([c, nomeDe[c]||"", `${String(mi%12+1).padStart(2,"0")}/${Math.floor(mi/12)}`, 0,0,0,0]); });
+  const vend=papel==="vendedor";
+  const lista= vend? [meuT] : (cods.length?cods:["T12345"]);
+  if(vend && !nomeDe[meuT]) nomeDe[meuT]="";
+  const ini= vend? (Math.floor(CUR/12)-1)*12 : CUR;   // vendedor: jan do ano anterior (para histórico)
+  lista.forEach(c=>{ for(let mi=ini; mi<=Math.floor(CUR/12)*12+11; mi++) linhas.push([c, nomeDe[c]||"", `${String(mi%12+1).padStart(2,"0")}/${Math.floor(mi/12)}`, 0,0,0,0]); });
   const ws=XLSX.utils.aoa_to_sheet(linhas); ws["!cols"]=[{wch:10},{wch:30},{wch:10},{wch:14},{wch:17},{wch:10},{wch:10}];
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Metas"); XLSX.writeFile(wb, "modelo-metas.xlsx");
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Metas"); XLSX.writeFile(wb, vend? `modelo-metas-${meuT}.xlsx` : "modelo-metas.xlsx");
 });
 $("fileMetas").addEventListener("change", async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f) return;
@@ -674,7 +702,7 @@ $("fileMetas").addEventListener("change", async e=>{
     if(permM && papel==="usuario"){ const fora=[...new Set(linhas.map(l=>l.codigo_t).filter(c=>!permM.includes(c)))];
       if(fora.length){ const { data } = await db.rpc("codigos_novos",{ p_codigos: fora }); novosM=(data||[]).map(c=>String(c).toUpperCase()); permM=permM.concat(novosM); } }
     if(permM){ foraM=[...new Set(linhas.filter(l=>!permM.includes(l.codigo_t)).map(l=>l.codigo_t))]; linhas=linhas.filter(l=>permM.includes(l.codigo_t)); }
-    if(!linhas.length && foraM.length) throw new Error(`As metas deste arquivo são de executivos que você não acompanha: ${foraM.join(", ")}.`);
+    if(!linhas.length && foraM.length) throw new Error(papel==="vendedor"? `As metas deste arquivo não são do seu código (${meuT}). Códigos encontrados: ${foraM.join(", ")}.` : `As metas deste arquivo são de executivos que você não acompanha: ${foraM.join(", ")}.`);
     if(!linhas.length) throw new Error("Nenhuma linha válida na planilha de metas."+(erros.length?" "+erros.slice(0,3).join("; "):""));
     metasPend=linhas;
     const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c&&!nomeDe[c]) nomeDe[c]=nm(o.exec); });
@@ -682,7 +710,7 @@ $("fileMetas").addEventListener("change", async e=>{
     const mesTxt=k=>{ const [y,m]=k.split("-"); return MES[+m-1]+"/"+y; };
     $("metasConfBody").innerHTML=
       `<p style="font-size:13.5px;margin:0 0 10px">${esc(f.name)}: <b>${linhas.length}</b> meta(s) de <b>${Object.keys(porCod).length}</b> vendedor(es). As metas destes vendedores e meses serão substituídas; as demais não mudam.</p>`+
-      (foraM.length?`<p style="font-size:13px;color:var(--warn)">Ignoradas (executivos já existentes que não estão liberados para você): ${foraM.join(", ")}.</p>`:"")+
+      (foraM.length?`<p style="font-size:13px;color:var(--warn)">${papel==="vendedor"? `Ignoradas: linhas de outros códigos (${foraM.join(", ")}). Você só pode carregar as suas metas (${meuT}).` : `Ignoradas (executivos já existentes que não estão liberados para você): ${foraM.join(", ")}.`}</p>`:"")+
       (novosM.length?`<p style="font-size:13px;color:var(--won)"><b>Executivo(s) novo(s)</b> ${novosM.join(", ")} serão adicionados à sua lista ao confirmar.</p>`:"")+
       (faltam.length?`<p style="font-size:13px;color:var(--muted)">Colunas ausentes (ficam zeradas): ${faltam.join(", ")}.</p>`:"")+
       (erros.length?`<p style="font-size:13px;color:var(--warn)">${erros.length} linha(s) ignorada(s): ${erros.slice(0,5).join("; ")}${erros.length>5?"…":""}</p>`:"")+

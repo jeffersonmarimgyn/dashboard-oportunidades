@@ -433,7 +433,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 
 <!-- METAS -->
 <dialog class="dlg" id="dlgMetas">
-  <div class="hd"><h3>Carregar metas</h3><p>Uma linha por vendedor por mês. O painel lê a primeira aba. Enviar de novo o mesmo vendedor e mês substitui a meta anterior.</p></div>
+  <div class="hd"><h3>Carregar metas</h3><p id="metasIntro"></p></div>
   <div class="bd">
     <div class="tbl"><table><thead><tr><th>Coluna</th><th>O que deve conter</th></tr></thead><tbody>
       <tr><td><b style="font-weight:600">Código T</b></td><td style="color:var(--muted)">Código do vendedor, ex.: T30535</td></tr>
@@ -444,7 +444,16 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
       <tr><td><b style="font-weight:600">Meta SCC</b></td><td style="color:var(--muted)">Meta de serviços recorrentes novos conquistados no mês</td></tr>
       <tr><td><b style="font-weight:600">Nome</b> <span class="badge">opcional</span></td><td style="color:var(--muted)">Só para facilitar a leitura; é ignorado</td></tr>
     </tbody></table></div>
-    <p style="font-size:13px;color:var(--muted);margin:12px 0 0">O modelo já vem com os vendedores do painel e os meses até dezembro, com metas zeradas para você preencher.</p>
+    <div id="metasIA" class="pjbox" style="margin-top:14px">
+      <b style="font-size:14px">Como montar a planilha com a sua IA (3 passos)</b>
+      <ol style="font-size:13px;margin:8px 0 10px;padding-left:20px;display:grid;gap:4px">
+        <li>No BI, tire um <b>print</b> da tela com todas as suas metas (CDU, RR e Serviços), mostrando os meses e a linha ESN.</li>
+        <li>Clique em <b>Baixar modelo de metas</b> (botão abaixo).</li>
+        <li>Na sua IA (ChatGPT, Claude, Gemini, Copilot...), anexe o <b>print</b> e o <b>modelo</b>, cole o texto abaixo e peça o arquivo. Confira as somas que ela mostrar e suba o arquivo aqui.</li>
+      </ol>
+      <textarea id="metasPrompt" readonly rows="9" style="width:100%;font:inherit;font-size:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--sheet);color:var(--ink);resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:6px"><button type="button" id="metasCopiar">Copiar texto</button></div>
+    </div>
   </div>
   <div class="ft"><button id="metasModelo" type="button">Baixar modelo de metas</button><button id="metasCancelar" type="button">Cancelar</button><button class="primary" id="metasEscolher" type="button">Escolher arquivo</button></div>
 </dialog>
