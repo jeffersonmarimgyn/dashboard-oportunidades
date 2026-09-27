@@ -100,6 +100,8 @@ async function entrar(){
   if(user && !(user.user_metadata && user.user_metadata.senha_definida)) abrirSenha(true);
 }
 
+async function atualizarPerfil(){ const { data } = await db.rpc("meu_perfil"); if(data) meusCodigos=(data.codigos_t||[]).map(c=>String(c).toUpperCase()); }
+
 /* ---------- troca de senha ---------- */
 let senhaObrigatoria=false;
 function abrirSenha(obrigatoria){
@@ -189,8 +191,12 @@ $("file").addEventListener("change", async e=>{
     linhas.forEach(l=>{ if(WON.test(l.situacao)) l.probabilidade=100; delete l.situacao; });
     // vendedor: só as oportunidades do próprio código T
     let ignoradas=0;
-    const perm=permitidos();
-    if(perm){ const antes=linhas.length; linhas=linhas.filter(l=>perm.includes(codigoT(l.executivo))); ignoradas=antes-linhas.length;
+    let perm=permitidos(), novosT=[];
+    if(perm && papel==="usuario"){ // gestor com lista: executivos nunca carregados entram automaticamente na lista dele
+      const fora=[...new Set(linhas.map(l=>codigoT(l.executivo)).filter(c=>c && !perm.includes(c)))];
+      if(fora.length){ const { data } = await db.rpc("codigos_novos",{ p_codigos: fora }); novosT=(data||[]).map(c=>String(c).toUpperCase()); perm=perm.concat(novosT); } }
+    var ignoradosT=[];
+    if(perm){ const antes=linhas.length; ignoradosT=linhas.map(l=>codigoT(l.executivo)||"sem código").filter(c=>!perm.includes(c)); linhas=linhas.filter(l=>perm.includes(codigoT(l.executivo))); ignoradas=antes-linhas.length;
       if(!linhas.length) throw new Error(`Nenhuma oportunidade dos seus executivos (${perm.join(", ")}) nestas planilhas.`); }
     // mesma oportunidade em mais de um arquivo: vale a última
     const porCodigo=new Map(); linhas.forEach(l=>porCodigo.set(l.codigo,l)); const dup=linhas.length-porCodigo.size; linhas=[...porCodigo.values()];
@@ -199,7 +205,8 @@ $("file").addEventListener("change", async e=>{
     pendente = { arquivos:files.map(f=>f.name), linhas, execs };
     $("cargaBody").innerHTML =
       `<ul class="files">${porArquivo.map(a=>`<li>${esc(a.nome)}: ${a.qtd} oportunidades</li>`).join("")}</ul>`+
-      (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. Você só pode atualizar a carteira de: ${permitidos().join(", ")}.</p>`:"")+
+      (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. ${papel==="vendedor"? `Você só pode atualizar a carteira do seu código (${meuT}).` : `São de executivos já existentes que não estão liberados para você (${[...new Set(ignoradosT)].join(", ")}); peça ao dono para liberar.`}</p>`:"")+
+      (novosT.length?`<p style="font-size:13px;color:var(--won)"><b>${novosT.length} executivo(s) novo(s)</b> (${novosT.join(", ")}) serão adicionados à sua lista ao confirmar.</p>`:"")+
       (nDesc?`<p style="font-size:13px;color:var(--muted)">${nDesc} oportunidade(s) com situação descartada ou perdida foram ignoradas.</p>`:"")+
       (nGanhas?`<p style="font-size:13px;color:var(--muted)">${nGanhas} oportunidade(s) com 100% serão registradas como <b>ganhas</b> e passam a contar no Realizado das metas.</p>`:"")+
       (semScc.length?`<p style="font-size:13px;color:var(--muted)">Sem a coluna "Valor Serviços Recorrentes" (SCC): ${semScc.map(esc).join(", ")}. O SCC dessas oportunidades fica zerado.</p>`:"")+
@@ -218,6 +225,7 @@ $("cargaConfirmar").addEventListener("click", async ()=>{
   btn.disabled=false; btn.textContent="Confirmar carga"; $("dlgCarga").close();
   if(error){ say(erroAmigavel(error), false); return; }
   say(`Carga gravada: ${pendente.linhas.length} oportunidades de ${pendente.execs.length} executivo(s).`, true);
+  await atualizarPerfil();
   pendente=null; await carregar();
 });
 
@@ -662,7 +670,9 @@ $("fileMetas").addEventListener("change", async e=>{
       if(!mes){ erros.push(`linha ${i+2}: mês inválido (${esc(r["Mês"]??"vazio")})`); return; }
       mapa.set(c+"|"+mes,{codigo_t:c,mes,meta_adesao:num(r["Meta Adesão"]),meta_implantacao:num(r["Meta Implantação"]),meta_rr:num(r["Meta RR"]),meta_scc:num(r["Meta SCC"])});
     });
-    let linhas=[...mapa.values()]; const permM=permitidos(); let foraM=[];
+    let linhas=[...mapa.values()]; let permM=permitidos(); let foraM=[], novosM=[];
+    if(permM && papel==="usuario"){ const fora=[...new Set(linhas.map(l=>l.codigo_t).filter(c=>!permM.includes(c)))];
+      if(fora.length){ const { data } = await db.rpc("codigos_novos",{ p_codigos: fora }); novosM=(data||[]).map(c=>String(c).toUpperCase()); permM=permM.concat(novosM); } }
     if(permM){ foraM=[...new Set(linhas.filter(l=>!permM.includes(l.codigo_t)).map(l=>l.codigo_t))]; linhas=linhas.filter(l=>permM.includes(l.codigo_t)); }
     if(!linhas.length && foraM.length) throw new Error(`As metas deste arquivo são de executivos que você não acompanha: ${foraM.join(", ")}.`);
     if(!linhas.length) throw new Error("Nenhuma linha válida na planilha de metas."+(erros.length?" "+erros.slice(0,3).join("; "):""));
@@ -672,7 +682,8 @@ $("fileMetas").addEventListener("change", async e=>{
     const mesTxt=k=>{ const [y,m]=k.split("-"); return MES[+m-1]+"/"+y; };
     $("metasConfBody").innerHTML=
       `<p style="font-size:13.5px;margin:0 0 10px">${esc(f.name)}: <b>${linhas.length}</b> meta(s) de <b>${Object.keys(porCod).length}</b> vendedor(es). As metas destes vendedores e meses serão substituídas; as demais não mudam.</p>`+
-      (foraM.length?`<p style="font-size:13px;color:var(--warn)">Ignoradas (fora dos executivos que você acompanha): ${foraM.join(", ")}.</p>`:"")+
+      (foraM.length?`<p style="font-size:13px;color:var(--warn)">Ignoradas (executivos já existentes que não estão liberados para você): ${foraM.join(", ")}.</p>`:"")+
+      (novosM.length?`<p style="font-size:13px;color:var(--won)"><b>Executivo(s) novo(s)</b> ${novosM.join(", ")} serão adicionados à sua lista ao confirmar.</p>`:"")+
       (faltam.length?`<p style="font-size:13px;color:var(--muted)">Colunas ausentes (ficam zeradas): ${faltam.join(", ")}.</p>`:"")+
       (erros.length?`<p style="font-size:13px;color:var(--warn)">${erros.length} linha(s) ignorada(s): ${erros.slice(0,5).join("; ")}${erros.length>5?"…":""}</p>`:"")+
       `<div class="tbl"><table><thead><tr><th>Código T</th><th>Nome</th><th>Meses</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th><th class="n h-scc">SCC</th></tr></thead><tbody>`+
@@ -688,7 +699,7 @@ $("metasConfirmar").addEventListener("click", async ()=>{
   const { data, error } = await db.rpc("registrar_metas",{ p_linhas: metasPend });
   b.disabled=false; b.textContent="Confirmar metas"; $("dlgMetasConf").close();
   if(error){ say(/Somente/i.test(error.message)? error.message : erroAmigavel(error), false); return; }
-  say(`Metas gravadas: ${metasPend.length} linha(s).`, true); metasPend=null; await carregar();
+  say(`Metas gravadas: ${metasPend.length} linha(s).`, true); await atualizarPerfil(); metasPend=null; await carregar();
 });
 
 
