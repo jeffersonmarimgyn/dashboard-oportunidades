@@ -354,7 +354,7 @@ function render(){
   $("dash").classList.remove("hidden");
 
   // barra de filtros
-  const pvals=[...new Set(rows.map(pKey))].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b);
+  const pvals=[...new Set(rows.map(pKey).concat(ganhas.length?["100"]:[]))].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b);   // 100% = ganhas
   const hzAtivo = state.hz!=="tt";
   const tD=arvoreDatas(), dAtivo=state.meses.size>0;
   if(!state.expInit && Object.keys(tD.anos).length){ Object.keys(tD.anos).forEach(y=>state.exp.add("y"+y)); state.expInit=true; }
@@ -365,14 +365,14 @@ function render(){
     ${[["and","Em andamento"],["gan","Ganhas"],["all","Todas"]].map(([k,t])=>`<button class="chip seg ${state.sit===k?"on":""}" data-sit="${k}">${t}</button>`).join("")}
     <span class="fsep"></span><span class="fl">Probabilidade</span>
     <button class="chip all ${state.probs.size?"":"on"}" data-p="__all" aria-pressed="${!state.probs.size}">Todas</button>`+
-    pvals.map(v=>`<button class="chip ${state.probs.has(v)?"on":""}" data-p="${v}" aria-pressed="${state.probs.has(v)}">${v==="s"?"Sem probabilidade":v+"%"}</button>`).join("")+
+    pvals.map(v=>`<button class="chip ${state.probs.has(v)?"on":""}" data-p="${v}" aria-pressed="${state.probs.has(v)}">${v==="s"?"Sem probabilidade":v==="100"?"100% (ganhas)":v+"%"}</button>`).join("")+
     `<span class="pcount">${state.probs.size? `<b>${state.probs.size}</b> de ${pvals.length} selecionadas` : `todas as ${pvals.length} faixas`}</span>`+
     (hzAtivo||state.probs.size||dAtivo||state.sit!=="and"? `<span class="fsum">Situação: <b>${{and:"em andamento",gan:"ganhas",all:"todas"}[state.sit]}</b> · Horizonte: <b>${hzAtivo?HZ[state.hz].name:"Total"}</b> · Data: <b>${esc(rotuloDatas(tD))}</b> · Probabilidade: <b>${state.probs.size?[...state.probs].sort((a,b)=>a==="s"?1:b==="s"?-1:a-b).map(v=>v==="s"?"sem prob.":v+"%").join(", "):"todas"}</b></span><button class="chip clear" data-p="__clear">Limpar filtros</button>` : "");
 
   document.querySelectorAll('.dpop input[data-ind]').forEach(i=>i.indeterminate=true);
 
   // quadro por executivo (respeita horizonte, probabilidade e data)
-  const gBase=ganhas.filter(o=>execOk(o.exec) && dOk(o));
+  const gBase=ganhas.filter(o=>execOk(o.exec) && dOk(o) && pOk0(o));   // ganhas também respeitam o filtro de probabilidade (100%)
   const vis=(state.sit!=="gan"? base.filter(HZ[state.hz].f) : []).concat(state.sit!=="and"? gBase.filter(HZ[state.hz].f) : []);
   const rk=v=>v.every(o=>o.won)?3: v.some(o=>!o.won&&o.fc)?0 : v.some(o=>!o.won&&o.pp)?1 : 2;
   if(!vis.length){ $("execBoards").innerHTML=`<div class="empty"><b>Nenhuma conta com estes filtros</b>Clique de novo no card selecionado ou em "Limpar filtros" para voltar a ver todas.</div>`; }
