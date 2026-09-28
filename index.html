@@ -283,9 +283,17 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .uform input,.uform select,#uTbl input,#uTbl select{font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);min-width:0}
 .umsg{font-size:13px;min-height:1.2em;margin-bottom:8px}.umsg.ok{color:var(--won)}.umsg.err{color:var(--warn)}
 #uTbl td{vertical-align:middle}#uTbl .acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}#uTbl .acts button{font-size:12.5px;padding:5px 9px}
-.pp{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px}.pp.dono{background:var(--band);color:#fff}.pp.usuario{background:var(--pp-soft);color:var(--pp)}.pp.vendedor{background:var(--fc-soft);color:var(--fct)}.pp.nenhum{background:var(--warn-soft);color:var(--warn)}
+.ppf{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px}.ppf.dono{background:var(--band);color:#fff}.ppf.usuario{background:var(--pp-soft);color:var(--pp)}.ppf.vendedor{background:var(--fc-soft);color:var(--fct)}.ppf.nenhum{background:var(--warn-soft);color:var(--warn)}
 .ucods{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.ucods .chip{font-size:12px;padding:4px 10px}.uhint{font-size:11.5px;color:var(--muted);margin-right:4px}.uadd{font:inherit;font-size:12px;padding:4px 8px;border:1px dashed var(--line);border-radius:20px;background:transparent;color:var(--ink)}
 @media (max-width:860px){.uform{grid-template-columns:1fr 1fr}}
+
+/* filtro de executivos */
+.ewrap{position:relative}
+.ebtn{font:inherit;font-size:14px;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;cursor:pointer;display:inline-flex;gap:10px;align-items:center;min-width:220px;justify-content:space-between}
+.ebtn i{font-style:normal;opacity:.8}
+.ebtn.on{background:#2F7BEA;border-color:#2F7BEA;font-weight:650}
+#execPop{width:320px;color:var(--ink)}
+.ebusca{width:100%;font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -315,8 +323,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
       </div>
     </div>
     <div class="controls">
-      <label for="exec" style="position:absolute;left:-9999px">Executivo</label>
-      <select id="exec"></select>
+      <div class="ewrap" id="execWrap"><button type="button" class="ebtn" id="execBtn" aria-label="Filtrar executivos"></button><div class="dpop hidden" id="execPop" role="dialog" aria-label="Filtro de executivos"></div></div>
       <button class="ghost hidden" id="btnUsers">Usuários</button>
       <button class="ghost" id="btnHist">Histórico</button>
       <button class="ghost" id="btnMetas">Carregar metas</button>
@@ -372,7 +379,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
   </div>
   <section class="card" style="margin-bottom:22px">
     <h3>Por executivo</h3>
-    <div class="desc">Forecast, pipeline e total de cada executivo. Respeita o filtro de probabilidade.</div>
+    <div class="desc">Forecast, pipeline e total de cada executivo. Segue os filtros de executivo, data prevista e probabilidade.</div>
     <div id="execList"></div>
   </section>
   <section class="card" style="margin-bottom:22px">

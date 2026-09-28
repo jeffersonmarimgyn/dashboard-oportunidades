@@ -18,7 +18,9 @@ const permitidos = () => papel==="vendedor"? (meuT?[meuT]:[]) : (papel==="usuari
 let rows = [], ganhas = [], metas = [], metasOn = true, ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
 const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
 const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
-let state = { sit:"and", pv:"ad", hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
+let state = { execs:new Set(), eOpen:false, eBusca:"", sit:"and", pv:"ad", hz:"tt", exec:"__all", q:"", open:new Set(), probs:new Set(), meses:new Set(), dtOpen:false, exp:new Set() };
+const execOk = e => !state.execs.size || state.execs.has(e);
+const codsSel = () => new Set([...state.execs].map(codigoT).filter(Boolean));
 const pKey = o => o.p==null? "s" : String(o.p);
 const pOk0 = o => !state.probs.size || state.probs.has(pKey(o));
 /* filtro de data prevista: ano > trimestre > mês */
@@ -91,7 +93,7 @@ async function entrar(){
   $("btnHist").classList.toggle("hidden", vend);
   $("btnMetas").classList.remove("hidden");   // vendedor também carrega as próprias metas
   $("btnUsers").classList.toggle("hidden", papel!=="dono");
-  $("exec").classList.toggle("hidden", vend);
+  $("execWrap").classList.toggle("hidden", vend);
   $("histAviso").textContent = papel==="dono" ? "Desfazer uma carga faz os executivos dela voltarem para a carga anterior." : "Registro de todas as cargas feitas no painel.";
   if(!data) say("Seu usuário ainda não foi liberado no painel. Peça ao responsável para cadastrar seu acesso.", false);
   await carregar();
@@ -157,7 +159,7 @@ async function carregar(){
   if(metasOn){ const { data, error } = await db.from("metas").select("*"); if(error) metasOn=false; else metas=data||[]; }
   const { data:uc } = await db.from("cargas").select("criada_em,criada_por").eq("desfeita",false).order("criada_em",{ascending:false}).limit(1);
   ultimaCarga = uc && uc[0] || null;
-  if(state.exec!=="__all" && !rows.some(o=>o.exec===state.exec)) state.exec="__all";
+  { const existe=new Set(rows.concat(ganhas).map(o=>o.exec)); [...state.execs].forEach(e=>{ if(!existe.has(e)) state.execs.delete(e); }); }
   render();
 }
 function erroAmigavel(err){
@@ -297,7 +299,7 @@ $("btnLimpar").addEventListener("click", async ()=>{
 /* ---------- árvore de datas ---------- */
 function arvoreDatas(){
   // meses com oportunidades em andamento OU ganhas (as ganhas saem de "rows", mas precisam aparecer no filtro)
-  const cont={}; rows.concat(ganhas.filter(o=>state.exec==="__all"||o.exec===state.exec)).forEach(o=>{ const k=mKey(o); cont[k]=(cont[k]||0)+1; });
+  const cont={}; rows.concat(ganhas.filter(o=>execOk(o.exec))).forEach(o=>{ const k=mKey(o); cont[k]=(cont[k]||0)+1; });
   const anos={};
   Object.keys(cont).filter(k=>k!=="sem").sort().forEach(k=>{ const [y,m]=k.split("-").map(Number), q=Math.ceil(m/3);
     ((anos[y]=anos[y]||{})[q]=anos[y][q]||[]).push({k,m,n:cont[k]}); });
@@ -334,15 +336,16 @@ const HZ = {
   pp:{name:"Pipeline", rule:"Mês atual e os dois seguintes", f:o=>o.pp},
   tt:{name:"Total", rule:"Todas as oportunidades em andamento", f:()=>true}
 };
-const scoped = () => rows.filter(o=>(state.exec==="__all"||o.exec===state.exec) && pOk(o));
+const scoped = () => rows.filter(o=>execOk(o.exec) && pOk(o));
 const inHz = () => scoped().filter(HZ[state.hz].f);
 const topEtapa = v => v.map(o=>o.etapa).sort((x,y)=>y.localeCompare(x,"pt-BR",{numeric:true}))[0];
 
 function render(){
   const base=scoped();
   $("source").textContent = (ultimaCarga? `Última carga em ${dt(ultimaCarga.criada_em)} por ${(ultimaCarga.criada_por||"").split("@")[0]}` : "Nenhuma carga ainda") + ` · referência: ${MES[TODAY.getMonth()]}/${TODAY.getFullYear()}`;
-  const execs=[...new Set(rows.map(o=>o.exec))].sort((a,b)=>nm(a).localeCompare(nm(b),"pt-BR"));
-  $("exec").innerHTML=`<option value="__all">Todos os executivos (${execs.length})</option>`+execs.map(e=>`<option value="${esc(e)}" ${e===state.exec?"selected":""}>${esc(nm(e))}</option>`).join("");
+  const execsAll=[...new Set(rows.concat(ganhas).map(o=>o.exec))].sort((a,b)=>nm(a).localeCompare(nm(b),"pt-BR"));
+  const execs=execsAll.filter(e=>rows.some(o=>o.exec===e));
+  renderExecFiltro(execsAll);
 
   if(!rows.length){
     $("execBoards").innerHTML=`<div class="empty"><b>Nenhuma oportunidade no painel</b>Clique em "Carregar planilhas" e envie a exportação do CRM. Pode ser um arquivo por executivo ou um único arquivo com vários.</div>`;
@@ -369,7 +372,7 @@ function render(){
   document.querySelectorAll('.dpop input[data-ind]').forEach(i=>i.indeterminate=true);
 
   // quadro por executivo (respeita horizonte, probabilidade e data)
-  const gBase=ganhas.filter(o=>(state.exec==="__all"||o.exec===state.exec) && dOk(o));
+  const gBase=ganhas.filter(o=>execOk(o.exec) && dOk(o));
   const vis=(state.sit!=="gan"? base.filter(HZ[state.hz].f) : []).concat(state.sit!=="and"? gBase.filter(HZ[state.hz].f) : []);
   const rk=v=>v.every(o=>o.won)?3: v.some(o=>!o.won&&o.fc)?0 : v.some(o=>!o.won&&o.pp)?1 : 2;
   if(!vis.length){ $("execBoards").innerHTML=`<div class="empty"><b>Nenhuma conta com estes filtros</b>Clique de novo no card selecionado ou em "Limpar filtros" para voltar a ver todas.</div>`; }
@@ -433,9 +436,11 @@ function render(){
   const xrow=(label,sub,a,cls,avatar)=>{ const pp=a.filter(o=>o.pp);
     return `<div class="xrow ${cls||""}"><div class="xwho"><span class="av">${avatar}</span><div><b>${esc(label)}</b><small>${sub}</small></div></div>
       ${blk("fc",a.filter(o=>o.fc),pp,"do pipeline (adesão + impl.)")}${blk("pp",pp,a,"do total (adesão + impl.)")}${blk("tt",a)}</div>`; };
-  const rowsP=rows.filter(pOk);
-  const ordem=[...execs].sort((x,y)=>{const f=e=>{const a=rowsP.filter(o=>o.exec===e);return [sum(a.filter(o=>o.fc),"ad")+sum(a.filter(o=>o.fc),"im"), sum(a.filter(o=>o.pp),"ad")+sum(a.filter(o=>o.pp),"im")]};const A=f(x),B=f(y);return B[0]-A[0]||B[1]-A[1]});
-  $("execList").innerHTML=(execs.length>1? xrow(`Time (${execs.length} executivos)`, `${new Set(rowsP.map(o=>o.acc)).size} contas · ${rowsP.length} oportunidades`, rowsP, "team", "∑") : "")+
+  // respeita o filtro de executivo (e as permissões: "rows" já vem só com o que o usuário pode ver)
+  const execsX = execs.filter(execOk);
+  const rowsP=rows.filter(o=>pOk(o) && execsX.includes(o.exec));
+  const ordem=[...execsX].sort((x,y)=>{const f=e=>{const a=rowsP.filter(o=>o.exec===e);return [sum(a.filter(o=>o.fc),"ad")+sum(a.filter(o=>o.fc),"im"), sum(a.filter(o=>o.pp),"ad")+sum(a.filter(o=>o.pp),"im")]};const A=f(x),B=f(y);return B[0]-A[0]||B[1]-A[1]});
+  $("execList").innerHTML=(execsX.length>1? xrow(`Time (${execsX.length} executivos)`, `${new Set(rowsP.map(o=>o.acc)).size} contas · ${rowsP.length} oportunidades`, rowsP, "team", "∑") : "")+
     ordem.map(e=>{const a=rowsP.filter(o=>o.exec===e);return xrow(nm(e), `${new Set(a.map(o=>o.acc)).size} contas · ${a.length} oportunidades`, a, "", ini(e))}).join("");
 
   // contas
@@ -484,7 +489,7 @@ function renderMetas0(){
   // códigos visíveis
   let cods=new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.map(o=>codigoT(o.exec)), ...ganhas.map(o=>codigoT(o.exec))].filter(Boolean));
   if(papel==="vendedor") cods=new Set(meuT?[meuT]:[]);
-  else if(state.exec!=="__all"){ const c=codigoT(state.exec); cods=new Set(c?[c]:[]); }
+  else if(state.execs.size){ cods=codsSel(); }
   const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c && !nomeDe[c]) nomeDe[c]=nm(o.exec); });
   const calc = cs => { const r={};
     VERT.forEach(v=>{
@@ -540,11 +545,11 @@ function renderProj(){
   const P=periodo(), inP=o=>o.mi!=null && P.ks.includes(keyMi(o.mi));
   let cods=new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.map(o=>codigoT(o.exec)), ...ganhas.map(o=>codigoT(o.exec))].filter(Boolean));
   if(papel==="vendedor") cods=new Set(meuT?[meuT]:[]);
-  else if(state.exec!=="__all"){ const c=codigoT(state.exec); cods=new Set(c?[c]:[]); }
+  else if(state.execs.size){ cods=codsSel(); }
   const meu=o=>cods.has(codigoT(o.exec));
   const metaDe=(v,ks)=>metas.filter(m=>cods.has(m.codigo_t.toUpperCase()) && ks.includes(String(m.mes).slice(0,7))).reduce((a,m)=>a+Number(m[v.m]||0),0);
   const prev=rows.filter(o=>meu(o) && inP(o) && pOk0(o));
-  const quem = papel==="vendedor"? "" : state.exec!=="__all"? ` · ${esc(nm(state.exec))}` : (cods.size>1?` · time (${cods.size} executivos)`:"");
+  const quem = papel==="vendedor"? "" : state.execs.size===1? ` · ${esc(nm([...state.execs][0]))}` : (cods.size>1?` · ${state.execs.size?"seleção":"time"} (${cods.size} executivos)`:"");
   $("projTit").innerHTML=`Projeção do período · ${esc(P.label)}${quem}`;
   $("projSub").textContent=`${P.ks.length} ${P.ks.length>1?"meses":"mês"} · meta = soma dos meses filtrados`;
 
@@ -777,7 +782,7 @@ function renderUsuarios(eu){
         <td colspan="2" id="eCodsCell">${u.papel==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T. Para gestor, escolha os executivos.</span>'}</td>
         <td><div class="acts"><button data-u="salvar" data-i="${i}" class="primary">Salvar</button><button data-u="cancelar">Cancelar</button></div></td></tr>`;
       return `<tr><td>${esc(u.nome||"—")}${eu2?' <span class="badge">você</span>':""}</td><td>${esc(loginDe(u))}${u.tem_login?"":' <span class="badge undo">sem login</span>'}</td>
-        <td><span class="pp ${u.papel||"nenhum"}">${u.papel?PAPEIS[u.papel]:"Sem acesso"}</span>${u.papel==="usuario"?`<div class="uhint">${(u.codigos_t||[]).length? (u.codigos_t||[]).join(", ") : "todos os executivos"}</div>`:""}</td><td>${quando(u.ultimo_acesso)}</td>
+        <td><span class="ppf ${u.papel||"nenhum"}">${u.papel?PAPEIS[u.papel]:"Sem acesso"}</span>${u.papel==="usuario"?`<div class="uhint">${(u.codigos_t||[]).length? (u.codigos_t||[]).join(", ") : "todos os executivos"}</div>`:""}</td><td>${quando(u.ultimo_acesso)}</td>
         <td>${u.tem_login?(u.senha_definida?"definida":'<span style="color:var(--fct)">provisória</span>'):"—"}</td>
         <td><div class="acts">${u.papel||!u.tem_login?`<button data-u="editar" data-i="${i}">Editar</button>`:`<button data-u="liberar" data-i="${i}">Dar acesso</button>`}
           ${u.tem_login?`<button data-u="senha" data-i="${i}">Redefinir senha</button>`:`<button data-u="criarlogin" data-i="${i}">Criar login</button>`}
@@ -824,7 +829,32 @@ $("uTbl").addEventListener("click", async e=>{
 });
 
 /* ---------- interações ---------- */
-$("exec").addEventListener("change",e=>{ state.exec=e.target.value; render(); });
+/* filtro de executivos (múltipla escolha) */
+function renderExecFiltro(lista){
+  const n=state.execs.size;
+  $("execBtn").innerHTML = (n===0? `Todos os executivos (${lista.length})` : n===1? esc(nm([...state.execs][0])) : `${n} executivos selecionados`)+'<i>▾</i>';
+  $("execBtn").classList.toggle("on", n>0);
+  const pop=$("execPop"); pop.classList.toggle("hidden", !state.eOpen);
+  if(!state.eOpen) return;
+  const q=state.eBusca.toLowerCase(), cont={}; rows.concat(ganhas).forEach(o=>cont[o.exec]=(cont[o.exec]||0)+1);
+  pop.innerHTML = (lista.length>8? `<input class="ebusca" id="eBusca" placeholder="Buscar executivo" value="${esc(state.eBusca)}">` : "")+
+    `<label class="dn"><input type="checkbox" data-ex="__all" ${n===0?"checked":""}><span><b>Todos os executivos</b></span><em>${lista.length}</em></label>`+
+    lista.filter(e=>!q||nm(e).toLowerCase().includes(q)||(codigoT(e)||"").toLowerCase().includes(q)).map(e=>
+      `<label class="dn"><input type="checkbox" data-ex="${esc(e)}" ${state.execs.has(e)?"checked":""}><span>${esc(nm(e))} <small style="color:var(--muted)">${codigoT(e)||""}</small></span><em>${cont[e]||0}</em></label>`).join("")+
+    (n? `<div style="padding:6px 6px 2px"><button type="button" class="chip clear" data-ex-clear="1">Limpar seleção</button></div>` : "");
+  const b=$("eBusca"); if(b && document.activeElement!==b && state.eFoco){ b.focus(); b.setSelectionRange(b.value.length,b.value.length); }
+}
+document.addEventListener("click", e=>{
+  if(e.target.closest("#execBtn")){ state.eOpen=!state.eOpen; state.eBusca=""; render(); return; }
+  if(e.target.closest("[data-ex-clear]")){ state.execs.clear(); render(); return; }
+  if(state.eOpen && !e.target.closest("#execPop")){ state.eOpen=false; render(); }
+}, true);
+document.addEventListener("change", e=>{
+  const i=e.target.closest && e.target.closest("input[data-ex]"); if(!i) return;
+  const v=i.dataset.ex; if(v==="__all") state.execs.clear(); else state.execs.has(v)? state.execs.delete(v) : state.execs.add(v);
+  render();
+});
+document.addEventListener("input", e=>{ if(e.target.id==="eBusca"){ state.eBusca=e.target.value; state.eFoco=true; render(); } });
 $("q").addEventListener("input",e=>{ state.q=e.target.value; render(); $("q").focus(); });
 document.addEventListener("change",e=>{
   const i=e.target.closest&&e.target.closest("input[data-node]"); if(!i) return;
