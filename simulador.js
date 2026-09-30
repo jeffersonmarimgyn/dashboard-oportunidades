@@ -73,6 +73,7 @@ function calcSCC(s){ // s: {meta, real, gatilho, repIni, repFim, campanha, realT
 }
 
 /* ---------- simulador RV (somente dono, por enquanto) ---------- */
+const MIX_FIXO=0.6;   // plano 60% fixo / 40% variável (padrão da planilha)
 const RV_PADRAO={gatilho:0.4,teto:3,pesoNR:0.2,pesoRR:0.5,pesoSV:0.3,campNR:0,campRR:0.2,campSV:0.1,sccGat:0.4,sccIni:0.15,sccFim:0.5,sccCamp:130000,sccAcel:0.2};
 let rvReg=(()=>{ try{ return {...RV_PADRAO, ...JSON.parse(localStorage.getItem("rv-regras")||"{}")}; }catch(e){ return {...RV_PADRAO}; } })();
 let rvFixo=(()=>{ try{ return Number(localStorage.getItem("rv-fixo"))||0; }catch(e){ return 0; } })();   // só no navegador
@@ -116,7 +117,7 @@ function rvDados(){
 function rvRender(){
   const {cod,cen,meses}=rvDados();
   const IND=[{k:"nr",nome:"Software NR (Adesão)",peso:rvReg.pesoNR,camp:rvReg.campNR},{k:"rr",nome:"Software RR (mensalidade)",peso:rvReg.pesoRR,camp:rvReg.campRR},{k:"sv",nome:"Serviços NR (Implantação)",peso:rvReg.pesoSV,camp:rvReg.campSV}];
-  const r=calcRV({fixo:rvFixo, mixFixo:Number($("rvMix").value), gatilho:rvReg.gatilho, teto:rvReg.teto, ind:IND}, meses);
+  const r=calcRV({fixo:rvFixo, mixFixo:MIX_FIXO, gatilho:rvReg.gatilho, teto:rvReg.teto, ind:IND}, meses);
   const sMeta= rvSccMeta!=null? rvSccMeta : meses.reduce((a,m)=>a+m.meta.scc,0), sReal=meses.reduce((a,m)=>a+m.scc,0), tbc= rvTBC!=null? rvTBC : sReal;
   const sc=calcSCC({meta:sMeta, real:sReal, gatilho:rvReg.sccGat, repIni:rvReg.sccIni, repFim:rvReg.sccFim, campanha:rvReg.sccCamp, realTBC:tbc, acel:rvReg.sccAcel});
   const semMeta=meses.every(m=>!m.meta.nr&&!m.meta.rr&&!m.meta.sv);
@@ -157,7 +158,7 @@ function rvRender(){
 }
 $("rvOlho").addEventListener("click", ()=>{ const i=$("rvFixo"); i.type= i.type==="password"? "text" : "password"; });
 $("rvRestaurar").addEventListener("click", ()=>{ rvOver={}; rvTBC=null; rvSccMeta=null; rvRender(); });
-["rvExec","rvTri","rvCen","rvMix"].forEach(id=>$(id).addEventListener("change", ()=>{ rvTBC=null; rvSccMeta=null; rvRender(); }));
+["rvExec","rvTri","rvCen"].forEach(id=>$(id).addEventListener("change", ()=>{ rvTBC=null; rvSccMeta=null; rvRender(); }));
 $("rvFixo").addEventListener("change", ()=>{ rvFixo=parseBR($("rvFixo").value); if($("rvLembrar").checked){ try{ localStorage.setItem("rv-fixo", String(rvFixo)); }catch(e){} } rvRender(); });
 $("rvLembrar").addEventListener("change", e=>{ try{ e.target.checked? localStorage.setItem("rv-fixo", String(rvFixo)) : localStorage.removeItem("rv-fixo"); }catch(err){} });
 document.addEventListener("change", e=>{
