@@ -93,6 +93,8 @@ async function entrar(){
   $("btnHist").classList.toggle("hidden", vend);
   $("btnMetas").classList.remove("hidden");   // vendedor também carrega as próprias metas
   $("btnUsers").classList.toggle("hidden", papel!=="dono");
+  $("btnRV").classList.toggle("hidden", papel!=="dono");
+  $("btnRV").onclick = ()=>window.open("simulador.html","_blank");
   $("execWrap").classList.toggle("hidden", vend);
   $("histAviso").textContent = papel==="dono" ? "Desfazer uma carga faz os executivos dela voltarem para a carga anterior." : "Registro de todas as cargas feitas no painel.";
   if(!data) say("Seu usuário ainda não foi liberado no painel. Peça ao responsável para cadastrar seu acesso.", false);
