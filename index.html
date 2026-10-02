@@ -320,6 +320,10 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .rvaviso{padding:10px 12px;border-radius:8px;background:var(--fc-soft);color:var(--fct);font-size:13px;margin:4px 0 12px}
 .rvneg{color:var(--warn)}.rvpos{color:var(--won)}
 @media (max-width:900px){.rvctl,.rvcards,.rvmeses{grid-template-columns:1fr 1fr}#rvRegras{grid-template-columns:1fr 1fr}}
+
+/* modo da carga */
+.cmodo{display:grid;gap:8px;margin:10px 0 12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-size:13.5px}
+.cmodo label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.cmodo input{margin-top:3px}.cmodo small{color:var(--fct)}
 </style>
 </head>
 <body>
@@ -422,7 +426,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 
 <!-- CONFIRMAR CARGA -->
 <dialog class="dlg" id="dlgCarga">
-  <div class="hd"><h3>Confirmar carga</h3><p>Cada executivo abaixo terá a carteira substituída pelo conteúdo destas planilhas. Os demais não mudam.</p></div>
+  <div class="hd"><h3>Confirmar carga</h3><p>Escolha se a planilha atualiza só as oportunidades enviadas ou substitui a carteira inteira dos executivos abaixo. Os demais executivos não mudam.</p></div>
   <div class="bd" id="cargaBody"></div>
   <div class="ft"><button id="cargaCancelar">Cancelar</button><button class="primary" id="cargaConfirmar">Confirmar carga</button></div>
 </dialog>

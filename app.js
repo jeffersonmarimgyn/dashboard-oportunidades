@@ -82,7 +82,7 @@ async function boot(){
   session ? entrar() : mostrarLogin();
   db.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT") mostrarLogin(); });
 }
-function mostrarLogin(){ $("app").classList.add("hidden"); $("login").classList.remove("hidden"); }
+function mostrarLogin(){ state.execsIni=false; state.execs.clear(); $("app").classList.add("hidden"); $("login").classList.remove("hidden"); }
 async function entrar(){
   $("login").classList.add("hidden"); $("app").classList.remove("hidden");
   const { data } = await db.rpc("meu_perfil");
@@ -161,7 +161,9 @@ async function carregar(){
   if(metasOn){ const { data, error } = await db.from("metas").select("*"); if(error) metasOn=false; else metas=data||[]; }
   const { data:uc } = await db.from("cargas").select("criada_em,criada_por").eq("desfeita",false).order("criada_em",{ascending:false}).limit(1);
   ultimaCarga = uc && uc[0] || null;
-  { const existe=new Set(rows.concat(ganhas).map(o=>o.exec)); [...state.execs].forEach(e=>{ if(!existe.has(e)) state.execs.delete(e); }); }
+  { const existe=new Set(rows.concat(ganhas).map(o=>o.exec)); [...state.execs].forEach(e=>{ if(!existe.has(e)) state.execs.delete(e); });
+    // ao entrar: começa só com a carteira de quem logou (se ele tiver código T); os demais ele marca no filtro
+    if(!state.execsIni){ state.execsIni=true; if(papel!=="vendedor" && meuT) [...existe].filter(e=>codigoT(e)===meuT).forEach(e=>state.execs.add(e)); } }
   render();
 }
 function erroAmigavel(err){
@@ -191,6 +193,7 @@ $("file").addEventListener("change", async e=>{
     // Situação: descartadas/perdidas são ignoradas; ganhas (WON) contam como 100%
     const IGN=/^(DISCARDED|DESCARTAD[AO]|LOST|PERDID[AO])$/, WON=/^(WON|GANH[AO])$/;
     const nDesc=linhas.filter(l=>IGN.test(l.situacao)).length;
+    let descartadas=linhas.filter(l=>IGN.test(l.situacao));   // na atualização parcial, saem da carteira
     linhas=linhas.filter(l=>!IGN.test(l.situacao));
     linhas.forEach(l=>{ if(WON.test(l.situacao)) l.probabilidade=100; delete l.situacao; });
     // vendedor: só as oportunidades do próprio código T
@@ -201,34 +204,65 @@ $("file").addEventListener("change", async e=>{
       if(fora.length){ const { data } = await db.rpc("codigos_novos",{ p_codigos: fora }); novosT=(data||[]).map(c=>String(c).toUpperCase()); perm=perm.concat(novosT); } }
     var ignoradosT=[];
     if(perm){ const antes=linhas.length; ignoradosT=linhas.map(l=>codigoT(l.executivo)||"sem código").filter(c=>!perm.includes(c)); linhas=linhas.filter(l=>perm.includes(codigoT(l.executivo))); ignoradas=antes-linhas.length;
-      if(!linhas.length) throw new Error(`Nenhuma oportunidade dos seus executivos (${perm.join(", ")}) nestas planilhas.`); }
+      descartadas=descartadas.filter(l=>perm.includes(codigoT(l.executivo)));
+      if(!linhas.length && !descartadas.length) throw new Error(`Nenhuma oportunidade dos seus executivos (${perm.join(", ")}) nestas planilhas.`); }
     // mesma oportunidade em mais de um arquivo: vale a última
     const porCodigo=new Map(); linhas.forEach(l=>porCodigo.set(l.codigo,l)); const dup=linhas.length-porCodigo.size; linhas=[...porCodigo.values()];
     const execs=[...new Set(linhas.map(l=>l.executivo))].sort();
     const nGanhas = linhas.filter(l=>l.probabilidade===100).length;
-    pendente = { arquivos:files.map(f=>f.name), linhas, execs };
+    // atualização parcial x carga completa (chave = Código da oportunidade)
+    const naCarteira=new Set(rows.concat(ganhas).map(o=>o.code));
+    const remover=descartadas.filter(l=>naCarteira.has(String(l.codigo)) && !porCodigo.has(l.codigo)).map(l=>({executivo:l.executivo, codigo:l.codigo, conta:l.conta, removida:true}));
+    const execsP=[...new Set(execs.concat(remover.map(l=>l.executivo)))].sort();
+    const hojeTot=execsP.reduce((a,x)=>a+rows.filter(o=>o.exec===x).length,0);
+    const sugereParcial = hojeTot>0 && linhas.length < hojeTot*0.5;
+    pendente = { arquivos:files.map(f=>f.name), linhas, execs, remover, execsP, modo: sugereParcial? "parcial" : "completa" };
     $("cargaBody").innerHTML =
       `<ul class="files">${porArquivo.map(a=>`<li>${esc(a.nome)}: ${a.qtd} oportunidades</li>`).join("")}</ul>`+
       (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. ${papel==="vendedor"? `Você só pode atualizar a carteira do seu código (${meuT}).` : `São de executivos já existentes que não estão liberados para você (${[...new Set(ignoradosT)].join(", ")}); peça ao dono para liberar.`}</p>`:"")+
       (novosT.length?`<p style="font-size:13px;color:var(--won)"><b>${novosT.length} executivo(s) novo(s)</b> (${novosT.join(", ")}) serão adicionados à sua lista ao confirmar.</p>`:"")+
-      (nDesc?`<p style="font-size:13px;color:var(--muted)">${nDesc} oportunidade(s) com situação descartada ou perdida foram ignoradas.</p>`:"")+
+      (nDesc?`<p style="font-size:13px;color:var(--muted)">${nDesc} oportunidade(s) com situação descartada ou perdida: na atualização parcial, as que estão na carteira saem dela; na carga completa, são ignoradas.</p>`:"")+
       (nGanhas?`<p style="font-size:13px;color:var(--muted)">${nGanhas} oportunidade(s) com 100% serão registradas como <b>ganhas</b> e passam a contar no Realizado das metas.</p>`:"")+
       (semScc.length?`<p style="font-size:13px;color:var(--muted)">Sem a coluna "Valor Serviços Recorrentes" (SCC): ${semScc.map(esc).join(", ")}. O SCC dessas oportunidades fica zerado.</p>`:"")+
       (dup?`<p style="font-size:13px;color:var(--muted)">${dup} oportunidade(s) repetida(s) entre arquivos foram consideradas uma vez só.</p>`:"")+
-      `<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Depois da carga</th><th class="n">Contas</th></tr></thead><tbody>`+
-      execs.map(x=>{ const hoje=rows.filter(o=>o.exec===x).length, nov=linhas.filter(l=>l.executivo===x);
-        return `<tr><td>${esc(nm(x))}${hoje?"":' <span class="badge clean">novo</span>'}</td><td class="n">${hoje}</td><td class="n"><b>${nov.length}</b></td><td class="n">${new Set(nov.map(l=>l.conta)).size}</td></tr>`}).join("")+
-      `</tbody></table></div>`;
+      `<div class="cmodo"><b>Como aplicar esta planilha?</b>
+        <label><input type="radio" name="cmodo" value="parcial" ${pendente.modo==="parcial"?"checked":""}> <span><b>Atualizar só estas oportunidades</b> — altera as que já existem (pelo Código), inclui as novas e mantém o restante da carteira. Descartadas/perdidas enviadas saem da carteira.</span></label>
+        <label><input type="radio" name="cmodo" value="completa" ${pendente.modo==="completa"?"checked":""}> <span><b>Substituir a carteira inteira</b> — use com a exportação completa do CRM. O que não estiver na planilha sai da carteira.</span></label>
+        ${sugereParcial?'<small>Sugerimos "Atualizar só estas oportunidades": a planilha tem bem menos linhas que a carteira atual.</small>':""}</div>
+       <div id="cargaTabela"></div>`;
+    tabelaCarga();
     $("dlgCarga").showModal();
   }catch(err){ say(err.message||"Não foi possível ler o arquivo. Envie um .xls ou .xlsx.", false); }
 });
+function tabelaCarga(){
+  const P=pendente; if(!P) return;
+  const naCarteira=new Set(rows.concat(ganhas).map(o=>o.code));
+  if(P.modo==="completa"){
+    $("cargaTabela").innerHTML=`<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Depois da carga</th><th class="n">Contas</th></tr></thead><tbody>`+
+      P.execs.map(x=>{ const hoje=rows.filter(o=>o.exec===x).length, nov=P.linhas.filter(l=>l.executivo===x);
+        return `<tr><td>${esc(nm(x))}${hoje?"":' <span class="badge clean">novo</span>'}</td><td class="n">${hoje}</td><td class="n"><b>${nov.length}</b></td><td class="n">${new Set(nov.map(l=>l.conta)).size}</td></tr>`}).join("")+`</tbody></table></div>`;
+    $("cargaConfirmar").textContent="Substituir carteira";
+  } else {
+    $("cargaTabela").innerHTML=`<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Atualizadas</th><th class="n">Novas</th><th class="n">Saem da carteira</th><th class="n">Mantidas</th></tr></thead><tbody>`+
+      P.execsP.map(x=>{ const hoje=rows.filter(o=>o.exec===x), l=P.linhas.filter(o=>o.executivo===x), env=new Set(l.map(o=>String(o.codigo)).concat(P.remover.filter(o=>o.executivo===x).map(o=>String(o.codigo))));
+        const atu=l.filter(o=>naCarteira.has(String(o.codigo))).length, nov=l.length-atu, sai=P.remover.filter(o=>o.executivo===x).length, mant=hoje.filter(o=>!env.has(o.code)).length;
+        return `<tr><td>${esc(nm(x))}</td><td class="n">${hoje.length}</td><td class="n"><b>${atu}</b></td><td class="n"><b>${nov}</b></td><td class="n">${sai}</td><td class="n">${mant}</td></tr>`}).join("")+`</tbody></table></div>`;
+    $("cargaConfirmar").textContent="Atualizar oportunidades";
+  }
+}
+$("cargaBody").addEventListener("change", e=>{ if(e.target.name==="cmodo" && pendente){ pendente.modo=e.target.value; tabelaCarga(); } });
 $("cargaCancelar").addEventListener("click", ()=>{ pendente=null; $("dlgCarga").close(); });
 $("cargaConfirmar").addEventListener("click", async ()=>{
   if(!pendente) return; const btn=$("cargaConfirmar"); btn.disabled=true; btn.textContent="Gravando…";
-  const { error } = await db.rpc("registrar_carga", { p_arquivos:pendente.arquivos, p_executivos:pendente.execs, p_linhas:pendente.linhas });
+  const parcial=pendente.modo==="parcial";
+  if(!parcial && !pendente.linhas.length){ btn.disabled=false; say("A planilha só tem oportunidades descartadas/perdidas. Use \"Atualizar só estas oportunidades\".", false); return; }
+  const { error } = await db.rpc("registrar_carga", parcial
+      ? { p_arquivos:pendente.arquivos, p_executivos:pendente.execsP, p_linhas:pendente.linhas.concat(pendente.remover), p_parcial:true }
+      : { p_arquivos:pendente.arquivos, p_executivos:pendente.execs, p_linhas:pendente.linhas });
   btn.disabled=false; btn.textContent="Confirmar carga"; $("dlgCarga").close();
-  if(error){ say(erroAmigavel(error), false); return; }
-  say(`Carga gravada: ${pendente.linhas.length} oportunidades de ${pendente.execs.length} executivo(s).`, true);
+  if(error){ say(/function .*registrar_carga|p_parcial/i.test(error.message||"")? "O banco ainda não recebeu o script alteracao-atualizacao-parcial.sql." : erroAmigavel(error), false); return; }
+  say(parcial? `Atualização gravada: ${pendente.linhas.length} oportunidade(s) alteradas ou incluídas${pendente.remover.length?`, ${pendente.remover.length} removida(s)`:""}. O restante da carteira foi mantido.`
+             : `Carga gravada: ${pendente.linhas.length} oportunidades de ${pendente.execs.length} executivo(s).`, true);
   await atualizarPerfil();
   pendente=null; await carregar();
 });
@@ -277,7 +311,7 @@ async function abrirHistorico(){
   $("histTbl").innerHTML = `<thead><tr><th>Data</th><th>Por</th><th>Executivos</th><th>Arquivos</th><th></th></tr></thead><tbody>`+
     (data.length? data.map(c=>`<tr style="${c.desfeita?"opacity:.55":""}"><td style="white-space:nowrap">${dt(c.criada_em)}</td><td>${esc((c.criada_por||"").split("@")[0])}</td>
       <td>${c.carga_executivos.map(x=>`${esc(nm(x.executivo))} (${x.qtd})`).join("<br>")}</td>
-      <td>${c.tipo==="limpeza"?'<span class="badge clean">limpeza</span>':esc((c.arquivos||[]).join(", "))}</td>
+      <td>${c.tipo==="limpeza"?'<span class="badge clean">limpeza</span>':(c.tipo==="parcial"?'<span class="badge">atualização parcial</span> ':"")+esc((c.arquivos||[]).join(", "))}</td>
       <td class="n">${c.desfeita?'<span class="badge undo">desfeita</span>':(papel==="dono"?`<button data-undo="${c.id}">Desfazer</button>`:"")}</td></tr>`).join("")
       : `<tr><td colspan="5" style="color:var(--muted)">Nenhuma carga ainda.</td></tr>`)+"</tbody>";
   const execs=[...new Set(rows.map(o=>o.exec))].sort();
@@ -780,7 +814,7 @@ function renderUsuarios(eu){
     usuarios.map((u,i)=>{ const ed=uEdit===i, eu2=(u.email||"").toLowerCase()===eu;
       if(ed) return `<tr><td><input id="eNome" value="${esc(u.nome||"")}"></td><td>${esc(loginDe(u))}</td>
         <td><select id="ePapel">${Object.entries(PAPEIS).map(([k,t])=>`<option value="${k}" ${u.papel===k?"selected":""}>${t}</option>`).join("")}</select>
-          <input id="eT" placeholder="Código T" value="${esc(u.codigo_t||"")}" style="margin-top:4px;width:110px;${u.papel==="vendedor"?"":"display:none"}"></td>
+          <input id="eT" placeholder="Código T" value="${esc(u.codigo_t||"")}" style="margin-top:4px;width:110px" title="Vendedor: obrigatório. Gestor/dono: opcional, é a carteira dele que já vem marcada ao entrar."></td>
         <td colspan="2" id="eCodsCell">${u.papel==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T. Para gestor, escolha os executivos.</span>'}</td>
         <td><div class="acts"><button data-u="salvar" data-i="${i}" class="primary">Salvar</button><button data-u="cancelar">Cancelar</button></div></td></tr>`;
       return `<tr><td>${esc(u.nome||"—")}${eu2?' <span class="badge">você</span>':""}</td><td>${esc(loginDe(u))}${u.tem_login?"":' <span class="badge undo">sem login</span>'}</td>
@@ -813,7 +847,7 @@ $("dlgUsers").addEventListener("click", e=>{ const b=e.target.closest("[data-cod
 $("dlgUsers").addEventListener("keydown", e=>{ const i=e.target.closest&&e.target.closest(".uadd"); if(!i||e.key!=="Enter") return; e.preventDefault();
   let c=i.value.trim().toUpperCase(); if(/^\d+$/.test(c)) c="T"+c; if(!/^T\d+$/.test(c)){ uMsg("Código T inválido (ex.: T12345).",false); return; }
   (i.dataset.alvo==="n"?uSel:eSel).add(c); redesenhaCods(i.dataset.alvo); });
-$("dlgUsers").addEventListener("change", e=>{ if(e.target.id==="ePapel"){ $("eT").style.display = e.target.value==="vendedor"? "" : "none"; const cell=$("eCodsCell"); if(cell) cell.innerHTML= e.target.value==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T.</span>'; } });
+$("dlgUsers").addEventListener("change", e=>{ if(e.target.id==="ePapel"){ const cell=$("eCodsCell"); if(cell) cell.innerHTML= e.target.value==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T.</span>'; } });
 $("uTbl").addEventListener("click", async e=>{
   const bt=e.target.closest("[data-u]"); if(!bt) return; const i=+bt.dataset.i, u=usuarios[i], acao=bt.dataset.u, eu=$("uTbl").dataset.eu;
   try{
