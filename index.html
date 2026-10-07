@@ -323,7 +323,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 
 /* modo da carga */
 .cmodo{display:grid;gap:8px;margin:10px 0 12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-size:13.5px}
-.cmodo label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.cmodo input{margin-top:3px}.cmodo small{color:var(--fct)}
+.cmodo span{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -426,9 +426,9 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 
 <!-- CONFIRMAR CARGA -->
 <dialog class="dlg" id="dlgCarga">
-  <div class="hd"><h3>Confirmar carga</h3><p>Escolha se a planilha atualiza só as oportunidades enviadas ou substitui a carteira inteira dos executivos abaixo. Os demais executivos não mudam.</p></div>
+  <div class="hd"><h3>Confirmar carga</h3><p>A planilha atualiza as oportunidades que já existem e inclui as novas. Nada que esteja fora dela é excluído.</p></div>
   <div class="bd" id="cargaBody"></div>
-  <div class="ft"><button id="cargaCancelar">Cancelar</button><button class="primary" id="cargaConfirmar">Confirmar carga</button></div>
+  <div class="ft"><button id="cargaCancelar">Cancelar</button><button class="primary" id="cargaConfirmar">Atualizar oportunidades</button></div>
 </dialog>
 
 <!-- AJUDA DO UPLOAD -->
@@ -443,7 +443,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
       <li>Pode ter outras colunas a mais; elas são ignoradas. A ordem das colunas não importa.</li>
       <li>Os nomes dos cabeçalhos precisam ser idênticos, com acentos e maiúsculas.</li>
       <li>Pode enviar um arquivo por executivo ou um arquivo com vários executivos.</li>
-      <li>Cada carga substitui a carteira dos executivos que aparecem nela; os demais não mudam.</li>
+      <li>Cada carga atualiza as oportunidades pelo Código e inclui as novas. O que não vier na planilha continua no painel; para excluir dados, peça ao administrador.</li>
     </ul>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="ajudaNaoMostrar"> Não mostrar esta ajuda de novo</label>
   </div>
@@ -520,11 +520,6 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
   <div class="hd"><h3>Histórico de cargas</h3><p id="histAviso"></p></div>
   <div class="bd">
     <div class="tbl"><table id="histTbl"></table></div>
-    <div class="row-actions hidden" id="limparBox">
-      <label for="limparSel" style="font-size:13.5px;font-weight:600">Limpar carteira de</label>
-      <select id="limparSel"></select>
-      <button class="danger" id="btnLimpar">Limpar executivo</button>
-    </div>
   </div>
   <div class="ft"><button id="histFechar">Fechar</button></div>
 </dialog>

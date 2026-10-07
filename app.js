@@ -89,7 +89,6 @@ async function entrar(){
   papel = (data && data.papel) || "usuario"; meuT = data && data.codigo_t || null;
   meusCodigos = (data && data.codigos_t || []).map(c=>String(c).toUpperCase());
   const vend = papel==="vendedor";
-  $("limparBox").classList.toggle("hidden", papel!=="dono");
   $("btnHist").classList.toggle("hidden", vend);
   $("btnMetas").classList.remove("hidden");   // vendedor também carrega as próprias metas
   $("btnUsers").classList.toggle("hidden", papel!=="dono");
@@ -210,25 +209,22 @@ $("file").addEventListener("change", async e=>{
     const porCodigo=new Map(); linhas.forEach(l=>porCodigo.set(l.codigo,l)); const dup=linhas.length-porCodigo.size; linhas=[...porCodigo.values()];
     const execs=[...new Set(linhas.map(l=>l.executivo))].sort();
     const nGanhas = linhas.filter(l=>l.probabilidade===100).length;
-    // atualização parcial x carga completa (chave = Código da oportunidade)
+    // sempre atualização: chave = Código da oportunidade; nada sai por ausência
     const naCarteira=new Set(rows.concat(ganhas).map(o=>o.code));
     const remover=descartadas.filter(l=>naCarteira.has(String(l.codigo)) && !porCodigo.has(l.codigo)).map(l=>({executivo:l.executivo, codigo:l.codigo, conta:l.conta, removida:true}));
     const execsP=[...new Set(execs.concat(remover.map(l=>l.executivo)))].sort();
-    const hojeTot=execsP.reduce((a,x)=>a+rows.filter(o=>o.exec===x).length,0);
-    const sugereParcial = hojeTot>0 && linhas.length < hojeTot*0.5;
-    pendente = { arquivos:files.map(f=>f.name), linhas, execs, remover, execsP, modo: sugereParcial? "parcial" : "completa" };
+    if(!linhas.length && !remover.length) throw new Error("Nada para atualizar: a planilha só tem oportunidades descartadas/perdidas que já não estão no painel.");
+    pendente = { arquivos:files.map(f=>f.name), linhas, execs, remover, execsP };
     $("cargaBody").innerHTML =
       `<ul class="files">${porArquivo.map(a=>`<li>${esc(a.nome)}: ${a.qtd} oportunidades</li>`).join("")}</ul>`+
       (ignoradas?`<p style="font-size:13px;color:var(--muted)">${ignoradas} oportunidade(s) de outros executivos foram ignoradas. ${papel==="vendedor"? `Você só pode atualizar a carteira do seu código (${meuT}).` : `São de executivos já existentes que não estão liberados para você (${[...new Set(ignoradosT)].join(", ")}); peça ao dono para liberar.`}</p>`:"")+
       (novosT.length?`<p style="font-size:13px;color:var(--won)"><b>${novosT.length} executivo(s) novo(s)</b> (${novosT.join(", ")}) serão adicionados à sua lista ao confirmar.</p>`:"")+
-      (nDesc?`<p style="font-size:13px;color:var(--muted)">${nDesc} oportunidade(s) com situação descartada ou perdida: na atualização parcial, as que estão na carteira saem dela; na carga completa, são ignoradas.</p>`:"")+
+      (nDesc?`<p style="font-size:13px;color:var(--muted)">${nDesc} oportunidade(s) com situação descartada ou perdida: as que estão no painel saem dele (continuam guardadas no histórico do banco).</p>`:"")+
       (nGanhas?`<p style="font-size:13px;color:var(--muted)">${nGanhas} oportunidade(s) com 100% serão registradas como <b>ganhas</b> e passam a contar no Realizado das metas.</p>`:"")+
       (semScc.length?`<p style="font-size:13px;color:var(--muted)">Sem a coluna "Valor Serviços Recorrentes" (SCC): ${semScc.map(esc).join(", ")}. O SCC dessas oportunidades fica zerado.</p>`:"")+
       (dup?`<p style="font-size:13px;color:var(--muted)">${dup} oportunidade(s) repetida(s) entre arquivos foram consideradas uma vez só.</p>`:"")+
-      `<div class="cmodo"><b>Como aplicar esta planilha?</b>
-        <label><input type="radio" name="cmodo" value="parcial" ${pendente.modo==="parcial"?"checked":""}> <span><b>Atualizar só estas oportunidades</b> — altera as que já existem (pelo Código), inclui as novas e mantém o restante da carteira. Descartadas/perdidas enviadas saem da carteira.</span></label>
-        <label><input type="radio" name="cmodo" value="completa" ${pendente.modo==="completa"?"checked":""}> <span><b>Substituir a carteira inteira</b> — use com a exportação completa do CRM. O que não estiver na planilha sai da carteira.</span></label>
-        ${sugereParcial?'<small>Sugerimos "Atualizar só estas oportunidades": a planilha tem bem menos linhas que a carteira atual.</small>':""}</div>
+      `<div class="cmodo"><b>Como esta planilha será aplicada</b>
+        <span>Oportunidades que já existem (mesmo Código) são <b>atualizadas</b>, as novas são <b>incluídas</b> e tudo o que não veio na planilha <b>continua como está</b>. Nada é excluído por ausência.</span></div>
        <div id="cargaTabela"></div>`;
     tabelaCarga();
     $("dlgCarga").showModal();
@@ -237,32 +233,19 @@ $("file").addEventListener("change", async e=>{
 function tabelaCarga(){
   const P=pendente; if(!P) return;
   const naCarteira=new Set(rows.concat(ganhas).map(o=>o.code));
-  if(P.modo==="completa"){
-    $("cargaTabela").innerHTML=`<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Depois da carga</th><th class="n">Contas</th></tr></thead><tbody>`+
-      P.execs.map(x=>{ const hoje=rows.filter(o=>o.exec===x).length, nov=P.linhas.filter(l=>l.executivo===x);
-        return `<tr><td>${esc(nm(x))}${hoje?"":' <span class="badge clean">novo</span>'}</td><td class="n">${hoje}</td><td class="n"><b>${nov.length}</b></td><td class="n">${new Set(nov.map(l=>l.conta)).size}</td></tr>`}).join("")+`</tbody></table></div>`;
-    $("cargaConfirmar").textContent="Substituir carteira";
-  } else {
-    $("cargaTabela").innerHTML=`<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Atualizadas</th><th class="n">Novas</th><th class="n">Saem da carteira</th><th class="n">Mantidas</th></tr></thead><tbody>`+
-      P.execsP.map(x=>{ const hoje=rows.filter(o=>o.exec===x), l=P.linhas.filter(o=>o.executivo===x), env=new Set(l.map(o=>String(o.codigo)).concat(P.remover.filter(o=>o.executivo===x).map(o=>String(o.codigo))));
-        const atu=l.filter(o=>naCarteira.has(String(o.codigo))).length, nov=l.length-atu, sai=P.remover.filter(o=>o.executivo===x).length, mant=hoje.filter(o=>!env.has(o.code)).length;
-        return `<tr><td>${esc(nm(x))}</td><td class="n">${hoje.length}</td><td class="n"><b>${atu}</b></td><td class="n"><b>${nov}</b></td><td class="n">${sai}</td><td class="n">${mant}</td></tr>`}).join("")+`</tbody></table></div>`;
-    $("cargaConfirmar").textContent="Atualizar oportunidades";
-  }
+  $("cargaTabela").innerHTML=`<div class="tbl"><table><thead><tr><th>Executivo</th><th class="n">Hoje no painel</th><th class="n">Atualizadas</th><th class="n">Novas</th><th class="n">Perdidas/descartadas (saem)</th><th class="n">Mantidas</th></tr></thead><tbody>`+
+    P.execsP.map(x=>{ const hoje=rows.filter(o=>o.exec===x), l=P.linhas.filter(o=>o.executivo===x), env=new Set(l.map(o=>String(o.codigo)).concat(P.remover.filter(o=>o.executivo===x).map(o=>String(o.codigo))));
+      const atu=l.filter(o=>naCarteira.has(String(o.codigo))).length, nov=l.length-atu, sai=P.remover.filter(o=>o.executivo===x).length, mant=hoje.filter(o=>!env.has(o.code)).length;
+      return `<tr><td>${esc(nm(x))}${hoje.length?"":' <span class="badge clean">novo</span>'}</td><td class="n">${hoje.length}</td><td class="n"><b>${atu}</b></td><td class="n"><b>${nov}</b></td><td class="n">${sai}</td><td class="n">${mant}</td></tr>`}).join("")+`</tbody></table></div>`;
 }
-$("cargaBody").addEventListener("change", e=>{ if(e.target.name==="cmodo" && pendente){ pendente.modo=e.target.value; tabelaCarga(); } });
 $("cargaCancelar").addEventListener("click", ()=>{ pendente=null; $("dlgCarga").close(); });
 $("cargaConfirmar").addEventListener("click", async ()=>{
   if(!pendente) return; const btn=$("cargaConfirmar"); btn.disabled=true; btn.textContent="Gravando…";
-  const parcial=pendente.modo==="parcial";
-  if(!parcial && !pendente.linhas.length){ btn.disabled=false; say("A planilha só tem oportunidades descartadas/perdidas. Use \"Atualizar só estas oportunidades\".", false); return; }
-  const { error } = await db.rpc("registrar_carga", parcial
-      ? { p_arquivos:pendente.arquivos, p_executivos:pendente.execsP, p_linhas:pendente.linhas.concat(pendente.remover), p_parcial:true }
-      : { p_arquivos:pendente.arquivos, p_executivos:pendente.execs, p_linhas:pendente.linhas });
-  btn.disabled=false; btn.textContent="Confirmar carga"; $("dlgCarga").close();
+  const { error } = await db.rpc("registrar_carga",
+      { p_arquivos:pendente.arquivos, p_executivos:pendente.execsP, p_linhas:pendente.linhas.concat(pendente.remover), p_parcial:true });
+  btn.disabled=false; btn.textContent="Atualizar oportunidades"; $("dlgCarga").close();
   if(error){ say(/function .*registrar_carga|p_parcial/i.test(error.message||"")? "O banco ainda não recebeu o script alteracao-atualizacao-parcial.sql." : erroAmigavel(error), false); return; }
-  say(parcial? `Atualização gravada: ${pendente.linhas.length} oportunidade(s) alteradas ou incluídas${pendente.remover.length?`, ${pendente.remover.length} removida(s)`:""}. O restante da carteira foi mantido.`
-             : `Carga gravada: ${pendente.linhas.length} oportunidades de ${pendente.execs.length} executivo(s).`, true);
+  say(`Atualização gravada: ${pendente.linhas.length} oportunidade(s) alteradas ou incluídas${pendente.remover.length?`, ${pendente.remover.length} perdida(s)/descartada(s) saíram do painel`:""}. O restante da carteira foi mantido.`, true);
   await atualizarPerfil();
   pendente=null; await carregar();
 });
@@ -281,7 +264,7 @@ const AJUDA = [
   ["Valor CDU/Adesão","Valor de adesão / CDU (não recorrente)"],
   ["Valor Serviços Não Recorrentes","Valor de implantação / serviços"],
   ["Valor Serviços Recorrentes","SCC: serviços recorrentes mensais (se não vier, fica zerado)"],
-  ["Situação","Opcional: WON conta como ganha (100%); DISCARDED e LOST são ignoradas"],
+  ["Situação","Opcional: WON conta como ganha (100%); DISCARDED e LOST saem do painel"],
   ["Descrição","Opcional: descrição da oportunidade"]
 ];
 $("ajudaCols").innerHTML = AJUDA.map(([c,d])=>`<tr><td style="white-space:nowrap"><b style="font-weight:600">${esc(c)}</b>${OPCIONAIS.includes(c)?' <span class="badge">opcional</span>':""}</td><td style="color:var(--muted)">${esc(d)}</td></tr>`).join("");
@@ -301,7 +284,7 @@ $("ajudaModelo").addEventListener("click", ()=>{
   XLSX.writeFile(wb, "modelo-oportunidades.xlsx");
 });
 
-/* ---------- histórico / desfazer / limpar ---------- */
+/* ---------- histórico / desfazer ---------- */
 $("btnHist").addEventListener("click", abrirHistorico);
 $("histFechar").addEventListener("click", ()=>$("dlgHist").close());
 async function abrirHistorico(){
@@ -311,11 +294,9 @@ async function abrirHistorico(){
   $("histTbl").innerHTML = `<thead><tr><th>Data</th><th>Por</th><th>Executivos</th><th>Arquivos</th><th></th></tr></thead><tbody>`+
     (data.length? data.map(c=>`<tr style="${c.desfeita?"opacity:.55":""}"><td style="white-space:nowrap">${dt(c.criada_em)}</td><td>${esc((c.criada_por||"").split("@")[0])}</td>
       <td>${c.carga_executivos.map(x=>`${esc(nm(x.executivo))} (${x.qtd})`).join("<br>")}</td>
-      <td>${c.tipo==="limpeza"?'<span class="badge clean">limpeza</span>':(c.tipo==="parcial"?'<span class="badge">atualização parcial</span> ':"")+esc((c.arquivos||[]).join(", "))}</td>
+      <td>${c.tipo==="limpeza"?'<span class="badge clean">limpeza</span>':(c.tipo==="parcial"?'<span class="badge">atualização</span> ':"")+esc((c.arquivos||[]).join(", "))}</td>
       <td class="n">${c.desfeita?'<span class="badge undo">desfeita</span>':(papel==="dono"?`<button data-undo="${c.id}">Desfazer</button>`:"")}</td></tr>`).join("")
       : `<tr><td colspan="5" style="color:var(--muted)">Nenhuma carga ainda.</td></tr>`)+"</tbody>";
-  const execs=[...new Set(rows.map(o=>o.exec))].sort();
-  $("limparSel").innerHTML = execs.length? execs.map(x=>`<option value="${esc(x)}">${esc(nm(x))}</option>`).join("") : `<option value="">Nenhum executivo</option>`;
 }
 $("histTbl").addEventListener("click", async e=>{
   const b=e.target.closest("[data-undo]"); if(!b) return;
@@ -323,13 +304,6 @@ $("histTbl").addEventListener("click", async e=>{
   b.disabled=true; const { error } = await db.rpc("desfazer_carga",{ p_carga:Number(b.dataset.undo) });
   if(error){ alert(erroAmigavel(error)); b.disabled=false; return; }
   await carregar(); abrirHistorico(); say("Carga desfeita.", true);
-});
-$("btnLimpar").addEventListener("click", async ()=>{
-  const x=$("limparSel").value; if(!x) return;
-  if(!confirm(`Limpar a carteira de ${nm(x)}? Ele deixa de aparecer no painel. Dá para desfazer pelo histórico.`)) return;
-  const { error } = await db.rpc("registrar_carga",{ p_arquivos:[], p_executivos:[x], p_linhas:[] });
-  if(error){ alert(erroAmigavel(error)); return; }
-  await carregar(); abrirHistorico(); say(`Carteira de ${nm(x)} limpa.`, true);
 });
 
 /* ---------- árvore de datas ---------- */
