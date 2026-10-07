@@ -15,6 +15,7 @@ const $ = id => document.getElementById(id);
 
 let meusCodigos = [];
 const permitidos = () => papel==="vendedor"? (meuT?[meuT]:[]) : (papel==="usuario" && meusCodigos.length? meusCodigos : null);  // null = todos
+let obsRes = {}, obsOn = true, ficha = null;
 let rows = [], ganhas = [], metas = [], metasOn = true, ultimaCarga = null, pendente = null, papel = "usuario", meuT = null;
 const DOM_T = CFG.DOMINIO_LOGIN_T || "vendedor.example.com";
 const codigoT = e => { const m=String(e||"").match(/\(\s*(T\d+)\s*\)/i); return m? m[1].toUpperCase() : null; };
@@ -52,6 +53,14 @@ const agg = a => ({n:a.length, contas:new Set(a.map(o=>o.acc)).size, ad:sum(a,"a
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const dt = s => new Date(s).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
 const say = (t,ok) => { const m=$("msg"); m.textContent=t; m.className="msg "+(ok?"ok":"err"); if(ok) setTimeout(()=>{ if(m.textContent===t) m.className="msg"; },6000); };
+
+const chaveConta = t => String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]+/g," ").trim();
+const diasDesde = s => Math.floor((Date.now()-new Date(s).getTime())/864e5);
+/* bolinha da última observação: verde até 7 dias, amarelo 8 a 14, vermelho acima ou nunca */
+const obsCor = k => { const r=obsRes[chaveConta(k)]; if(!r) return "r"; const d=diasDesde(r.ultima); return d<=7?"g":d<=14?"y":"r"; };
+const obsTag = k => { if(!obsOn) return ""; const r=obsRes[chaveConta(k)], c=obsCor(k);
+  const tip = r? `${r.n} observaç${r.n>1?"ões":"ão"} · última há ${diasDesde(r.ultima)} dia(s)` : "Nenhuma observação ainda";
+  return `<span class="obt ob-${c}" title="${tip}"><i></i>${r? "💬 "+r.n : "sem obs."}</span>`; };
 
 /* linha no formato do banco -> objeto usado nas telas */
 function toView(r){
@@ -160,10 +169,21 @@ async function carregar(){
   if(metasOn){ const { data, error } = await db.from("metas").select("*"); if(error) metasOn=false; else metas=data||[]; }
   const { data:uc } = await db.from("cargas").select("criada_em,criada_por").eq("desfeita",false).order("criada_em",{ascending:false}).limit(1);
   ultimaCarga = uc && uc[0] || null;
+  await carregarObsResumo();
   { const existe=new Set(rows.concat(ganhas).map(o=>o.exec)); [...state.execs].forEach(e=>{ if(!existe.has(e)) state.execs.delete(e); });
     // ao entrar: começa só com a carteira de quem logou (se ele tiver código T); os demais ele marca no filtro
     if(!state.execsIni){ state.execsIni=true; if(papel!=="vendedor" && meuT) [...existe].filter(e=>codigoT(e)===meuT).forEach(e=>state.execs.add(e)); } }
   render();
+}
+async function carregarObsResumo(){
+  const r={}; let from=0; obsOn=true;
+  while(true){
+    const { data, error } = await db.from("observacoes").select("conta_chave,criada_em").order("id").range(from, from+999);
+    if(error){ obsOn=false; break; }
+    data.forEach(o=>{ const x=r[o.conta_chave]=r[o.conta_chave]||{n:0,ultima:o.criada_em}; x.n++; if(o.criada_em>x.ultima) x.ultima=o.criada_em; });
+    if(data.length<1000) break; from+=1000;
+  }
+  obsRes=r;
 }
 function erroAmigavel(err){
   const m = err && (err.message||String(err)) || "";
@@ -391,8 +411,8 @@ function render(){
     const list=Object.entries(m).sort((x,y)=>rk(x[1])-rk(y[1])||x[0].localeCompare(y[0],"pt-BR"));
     return `<div class="board"><h2>Executivo: ${esc(nm(e))}<small>${list.length} ${state.sit==="and"?"contas em aberto":"contas"} · ${a.length} oportunidades${state.sit!=="and"?` (${a.filter(o=>o.won).length} ganhas)`:""}</small></h2>
       <div class="meta">Atualizado em ${a[0].cargaEm? dt(a[0].cargaEm):"—"}</div>
-      <div class="leg"><span><i style="background:var(--fc)"></i>No forecast</span><span><i style="background:var(--pp)"></i>No pipeline</span><span><i style="background:var(--tt)"></i>Demais em andamento</span>${state.sit!=="and"?'<span><i style="background:var(--won)"></i>Ganha</span>':""}</div>
-      <div class="tiles">${list.map(([k,v])=>`<button class="tile ${["fc","pp","tt","gw"][rk(v)]}" data-acc="${esc(k)}"><span class="an">${esc(title(k))}</span><span class="am">${v.length} ${v.length>1?"oportunidades":"oportunidade"} · ${esc(topEtapa(v))}</span></button>`).join("")}</div></div>`}).join("");
+      <div class="leg"><span><i style="background:var(--fc)"></i>No forecast</span><span><i style="background:var(--pp)"></i>No pipeline</span><span><i style="background:var(--tt)"></i>Demais em andamento</span>${state.sit!=="and"?'<span><i style="background:var(--won)"></i>Ganha</span>':""}${obsOn?'<span class="obleg">Última observação: <b class="ob-g"><i></i>até 7 dias</b> <b class="ob-y"><i></i>8 a 14</b> <b class="ob-r"><i></i>mais de 14 ou nenhuma</b></span>':""}</div>
+      <div class="tiles">${list.map(([k,v])=>`<button class="tile ${["fc","pp","tt","gw"][rk(v)]}" data-acc="${esc(k)}" data-exec="${esc(e)}" title="Abrir ficha da conta"><span class="an">${esc(title(k))}</span><span class="am">${v.length} ${v.length>1?"oportunidades":"oportunidade"} · ${esc(topEtapa(v))}</span>${obsTag(k)}</button>`).join("")}</div></div>`}).join("");
 
   // horizontes
   $("hz").innerHTML=Object.entries(HZ).map(([k,h])=>{ const s=agg(base.filter(h.f)); const won=0;
@@ -459,7 +479,7 @@ function render(){
   const accs=Object.entries(byAcc).filter(([k,v])=>!q||k.toLowerCase().includes(q)||v.some(o=>o.code.includes(q))).sort((a,b)=>peso(b[1])-peso(a[1]));
   $("accTbl").innerHTML=`<thead><tr><th>Conta</th><th class="n">Opp</th><th>Etapa mais avançada</th><th>Fechamento</th><th class="n h-ad">Adesão</th><th class="n h-im">Implantação</th><th class="n h-rr">RR</th><th class="n h-scc">SCC</th></tr></thead><tbody>`+
    (accs.length? accs.map(([k,v])=>{ const dmin=v.filter(o=>o.d).map(o=>o.d).sort((a,b)=>a-b)[0], open=state.open.has(k);
-     let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b></td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n v-ad">${brl(sum(v,"ad"))}</td><td class="n v-im">${brl(sum(v,"im"))}</td><td class="n v-rr">${brl(sum(v,"mrr"))}</td><td class="n v-scc">${brl(sum(v,"scc"))}</td></tr>`;
+     let h=`<tr class="acc" data-a="${esc(k)}" tabindex="0" aria-expanded="${open}"><td><b style="font-weight:600">${esc(title(k))}</b>${obsOn?` <button type="button" class="obtn" data-obs="${esc(k)}" title="Abrir ficha e observações">${obsTag(k)}</button>`:""}</td><td class="n">${v.length}</td><td>${esc(topEtapa(v))}</td><td>${dmin?dmin.toLocaleDateString("pt-BR"):"—"}</td><td class="n v-ad">${brl(sum(v,"ad"))}</td><td class="n v-im">${brl(sum(v,"im"))}</td><td class="n v-rr">${brl(sum(v,"mrr"))}</td><td class="n v-scc">${brl(sum(v,"scc"))}</td></tr>`;
      if(open) h+=v.map(o=>`<tr class="det"><td>${esc(o.code)} · ${esc(o.desc)}<br>${esc(o.tipo)} · ${esc(nm(o.exec))}</td><td class="n">${o.won?'<span class="pill won">Ganha</span>':`<span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span>`}</td><td>${esc(o.etapa)}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td><td class="n">${full(o.ad)}</td><td class="n">${full(o.im)}</td><td class="n">${full(o.mrr)}</td><td class="n">${full(o.scc)}</td></tr>`).join("");
      return h; }).join("") : `<tr><td colspan="8" style="color:var(--muted)">Nenhuma conta com estes filtros${q?" com essa busca":""}.</td></tr>`)+"</tbody>";
 }
@@ -838,6 +858,61 @@ $("uTbl").addEventListener("click", async e=>{
   }catch(err){ uMsg(err.message,false); }
 });
 
+/* ---------- ficha da conta + observações ---------- */
+function oppsDaConta(k){ const ch=chaveConta(k); return rows.concat(ganhas).filter(o=>chaveConta(o.acc)===ch); }
+async function abrirFicha(k, execPref){
+  const ops=oppsDaConta(k);
+  const cont={}; ops.forEach(o=>cont[o.exec]=(cont[o.exec]||0)+1);
+  const execs=Object.keys(cont).sort((a,b)=>cont[b]-cont[a]);
+  ficha={ conta:k, exec: execPref && cont[execPref]? execPref : execs[0], execs, ops };
+  const s=agg(ops);
+  $("fTitulo").textContent=title(k);
+  $("fSub").textContent=`${execs.map(nm).join(", ")||"Sem executivo"} · ${ops.length} ${ops.length===1?"oportunidade":"oportunidades"}`;
+  $("fResumo").innerHTML=[["Adesão","ad","v-ad"],["Implantação","im","v-im"],["RR mensal","mrr","v-rr"],["SCC","scc","v-scc"]]
+    .map(([t,c,cl])=>`<div><span>${t}</span><b class="${cl}" title="${full(s[c])}">${brl(s[c])}</b></div>`).join("");
+  const ord=[...ops].sort((a,b)=>(!!a.won-!!b.won)||((a.mi??1e9)-(b.mi??1e9)));
+  $("fOpps").innerHTML=ord.length? `<thead><tr><th>Oportunidade</th><th>Etapa</th><th class="n">Prob.</th><th>Fechamento</th></tr></thead><tbody>`+
+    ord.map(o=>`<tr><td><b style="font-weight:600">${esc(o.code)}</b> · ${esc(o.desc||o.tipo)}${execs.length>1?`<br><small style="color:var(--muted)">${esc(nm(o.exec))}</small>`:""}</td><td>${esc(o.etapa)}</td><td class="n">${o.won?'<span class="pill won">Ganha</span>':`<span class="pill ${o.fc?"hi":""}">${o.p==null?"s/ prob.":o.p+"%"}</span>`}</td><td>${o.d?o.d.toLocaleDateString("pt-BR"):"—"}</td></tr>`).join("")+"</tbody>"
+    : `<tbody><tr><td style="color:var(--muted)">Nenhuma oportunidade desta conta no painel.</td></tr></tbody>`;
+  $("fOpp").innerHTML=`<option value="">Conta inteira</option>`+ord.map(o=>`<option value="${esc(o.code)}">${esc(o.code)} · ${esc((o.desc||o.tipo||"").slice(0,60))}</option>`).join("");
+  $("fTexto").value=""; $("fPasso").value=""; $("fData").value=""; $("fErr").textContent="";
+  $("fForm").classList.toggle("hidden", !obsOn);
+  $("dlgFicha").showModal();
+  await carregarObs();
+}
+async function carregarObs(){
+  if(!ficha) return;
+  if(!obsOn){ $("fHist").innerHTML=`<p class="obvazio">As observações ainda não foram ativadas no banco (script alteracao-observacoes.sql).</p>`; return; }
+  $("fHist").innerHTML=`<p class="obvazio">Carregando…</p>`;
+  const { data, error } = await db.from("observacoes").select("*").eq("conta_chave", chaveConta(ficha.conta)).order("criada_em",{ascending:false});
+  if(error){ $("fHist").innerHTML=`<p class="obvazio">${esc(erroAmigavel(error))}</p>`; return; }
+  $("fCont").textContent = data.length? `(${data.length})` : "";
+  if(!data.length){ $("fHist").innerHTML=`<p class="obvazio">Nenhuma observação ainda. A primeira fica registrada com seu nome, data e hora.</p>`; return; }
+  const hoje=iso(new Date()), opDesc={}; ficha.ops.forEach(o=>opDesc[o.code]=o.desc||o.tipo||"");
+  $("fHist").innerHTML=data.map(o=>{ const quem=o.autor_nome||(o.autor_email||"").split("@")[0];
+    const venc=o.proximo_data && o.proximo_data<hoje, pd=o.proximo_data? o.proximo_data.split("-").reverse().join("/") : "";
+    return `<article class="obi"><header><b>${esc(quem)}</b><time>${dt(o.criada_em)}</time></header>
+      ${o.codigo_oportunidade?`<div class="obop">Oportunidade ${esc(o.codigo_oportunidade)}${opDesc[o.codigo_oportunidade]?" · "+esc(opDesc[o.codigo_oportunidade]):""}</div>`:""}
+      <p>${esc(o.texto)}</p>
+      ${o.proximo_passo||pd?`<div class="obps ${venc?"venc":""}"><b>Próximo passo${pd?` até ${pd}`:""}${venc?" · vencido":""}:</b> ${esc(o.proximo_passo||"")}</div>`:""}</article>`; }).join("");
+}
+$("fFechar").addEventListener("click", ()=>{ $("dlgFicha").close(); });
+$("dlgFicha").addEventListener("close", ()=>{ ficha=null; });
+$("fForm").addEventListener("submit", async e=>{
+  e.preventDefault(); if(!ficha) return;
+  const texto=$("fTexto").value.trim(); if(!texto){ $("fErr").textContent="Escreva a observação antes de registrar."; $("fTexto").focus(); return; }
+  const cod=$("fOpp").value||null, op=cod? ficha.ops.find(o=>o.code===cod) : null;
+  const reg={ conta:ficha.conta, executivo: op? op.exec : ficha.exec, codigo_oportunidade:cod, texto,
+    proximo_passo:$("fPasso").value.trim()||null, proximo_data:$("fData").value||null };
+  if(!reg.executivo){ $("fErr").textContent="Esta conta não tem executivo no painel."; return; }
+  $("fSalvar").disabled=true; $("fErr").textContent="";
+  const { error } = await db.from("observacoes").insert(reg);
+  $("fSalvar").disabled=false;
+  if(error){ $("fErr").textContent=/does not exist|relation/i.test(error.message||"")? "O banco ainda não recebeu o script alteracao-observacoes.sql." : erroAmigavel(error); return; }
+  $("fTexto").value=""; $("fPasso").value=""; $("fData").value=""; $("fOpp").value="";
+  await carregarObs(); await carregarObsResumo(); render(); say("Observação registrada.", true);
+});
+
 /* ---------- interações ---------- */
 /* filtro de executivos (múltipla escolha) */
 function renderExecFiltro(lista){
@@ -883,10 +958,10 @@ document.addEventListener("click",e=>{
   const c=e.target.closest("[data-p]"); if(c){ const v=c.dataset.p;
     if(v==="__all") state.probs.clear(); else if(v==="__clear"){ state.probs.clear(); state.meses.clear(); state.hz="tt"; state.sit="and"; } else state.probs.has(v)? state.probs.delete(v) : state.probs.add(v);
     render(); return; }
-  const t=e.target.closest(".tile"); if(t){ const k=t.dataset.acc; state.q=""; $("q").value=""; state.open.add(k); render();
-    const r=[...document.querySelectorAll("tr.acc")].find(x=>x.dataset.a===k); if(r) r.scrollIntoView({behavior:"smooth",block:"center"}); return; }
+  const ob=e.target.closest("[data-obs]"); if(ob){ e.stopPropagation(); abrirFicha(ob.dataset.obs); return; }
+  const t=e.target.closest(".tile"); if(t){ abrirFicha(t.dataset.acc, t.dataset.exec); return; }
   const a=e.target.closest("tr.acc"); if(a){ const k=a.dataset.a; state.open.has(k)?state.open.delete(k):state.open.add(k); render(); }
 });
-document.addEventListener("keydown",e=>{ const a=e.target.closest&&e.target.closest("tr.acc"); if(a&&(e.key==="Enter"||e.key===" ")){ e.preventDefault(); a.click(); } });
+document.addEventListener("keydown",e=>{ if(e.target.closest&&e.target.closest("[data-obs]")) return; const a=e.target.closest&&e.target.closest("tr.acc"); if(a&&(e.key==="Enter"||e.key===" ")){ e.preventDefault(); a.click(); } });
 
 boot();
