@@ -708,16 +708,20 @@ $("btnMetas").addEventListener("click", abrirAjudaMetas);
 $("metasCancelar").addEventListener("click", ()=>$("dlgMetas").close());
 $("metasEscolher").addEventListener("click", ()=>{ $("dlgMetas").close(); $("fileMetas").click(); });
 $("metasModelo").addEventListener("click", ()=>{
-  const cods=[...new Set(rows.concat(ganhas).map(o=>codigoT(o.exec)).filter(Boolean))].sort();
-  const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c&&!nomeDe[c]) nomeDe[c]=nm(o.exec); });
+  // modelo em branco: não traz nomes, códigos nem metas de ninguém (só o código do próprio vendedor)
+  const vend=papel==="vendedor", cod= vend && meuT ? meuT : "TXXXXX", ano=Math.floor(CUR/12);
   const linhas=[["Código T","Nome","Mês","Meta Adesão","Meta Implantação","Meta RR","Meta SCC"]];
-  const vend=papel==="vendedor";
-  const lista= vend? [meuT] : (cods.length?cods:["T12345"]);
-  if(vend && !nomeDe[meuT]) nomeDe[meuT]="";
-  const ini= vend? (Math.floor(CUR/12)-1)*12 : CUR;   // vendedor: jan do ano anterior (para histórico)
-  lista.forEach(c=>{ for(let mi=ini; mi<=Math.floor(CUR/12)*12+11; mi++) linhas.push([c, nomeDe[c]||"", `${String(mi%12+1).padStart(2,"0")}/${Math.floor(mi/12)}`, 0,0,0,0]); });
-  const ws=XLSX.utils.aoa_to_sheet(linhas); ws["!cols"]=[{wch:10},{wch:30},{wch:10},{wch:14},{wch:17},{wch:10},{wch:10}];
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Metas"); XLSX.writeFile(wb, vend? `modelo-metas-${meuT}.xlsx` : "modelo-metas.xlsx");
+  for(let m=1;m<=12;m++) linhas.push([cod, "", `${String(m).padStart(2,"0")}/${ano}`, null, null, null, null]);
+  const ws=XLSX.utils.aoa_to_sheet(linhas); ws["!cols"]=[{wch:10},{wch:26},{wch:10},{wch:14},{wch:17},{wch:10},{wch:10}];
+  const instr=[["Como preencher"],[""],
+    ["1. Uma linha por mês. Mês no formato MM/AAAA (ex.: 10/"+ano+")."],
+    [vend? "2. O Código T já está preenchido com o seu. Você só pode carregar as suas metas." : "2. Troque TXXXXX pelo código T do vendedor (ex.: T12345). Para mais de um vendedor, copie o bloco de 12 linhas."],
+    ["3. Preencha as metas em números, sem R$ (ex.: 25000). Deixe 0 onde não houver meta."],
+    ["4. Nome é opcional (só para facilitar a leitura)."],
+    ["5. Meses que não estiverem na planilha não são alterados. Reenviar o mesmo código e mês substitui a meta."]];
+  const wi=XLSX.utils.aoa_to_sheet(instr); wi["!cols"]=[{wch:110}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Metas"); XLSX.utils.book_append_sheet(wb, wi, "Instruções");
+  XLSX.writeFile(wb, vend? `modelo-metas-${meuT}.xlsx` : "modelo-metas.xlsx");
 });
 $("fileMetas").addEventListener("change", async e=>{
   const f=e.target.files[0]; e.target.value=""; if(!f) return;

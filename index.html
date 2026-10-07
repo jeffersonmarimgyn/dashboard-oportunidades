@@ -331,7 +331,36 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 
 /* modo da carga */
 .cmodo{display:grid;gap:8px;margin:10px 0 12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-size:13.5px}
-.cmodo label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.cmodo input{margin-top:3px}.cmodo small{color:var(--fct)}
+.cmodo span{color:var(--muted)}
+
+/* observações por conta */
+.obt{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);font-weight:500}
+.obt i,.obleg b i{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--warn)}
+.ob-g i{background:var(--won)!important} .ob-y i{background:var(--fc)!important} .ob-r i{background:var(--warn)!important}
+.obleg{margin-left:auto;display:inline-flex;gap:10px;align-items:center;flex-wrap:wrap} .obleg b{font-weight:500;display:inline-flex;gap:4px;align-items:center}
+.obtn{font:inherit;border:1px solid var(--line);background:var(--sheet);border-radius:20px;padding:1px 8px;cursor:pointer;margin-left:6px;vertical-align:middle}
+.obtn:hover{border-color:var(--ink)}
+dialog.drawer{margin:0 0 0 auto;height:100%;max-height:100%;width:min(600px,100vw);border-radius:16px 0 0 16px;display:flex;flex-direction:column}
+dialog.drawer:not([open]){display:none}
+dialog.drawer .bd{max-height:none;flex:1;padding-bottom:22px}
+.fres{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 14px}
+.fres div{background:var(--paper);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;font-size:12px;color:var(--muted)} .fres b{font-size:15px}
+.fsec{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 8px;font-weight:650}
+.fform{display:grid;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px}
+.fform textarea,.fform input,.fform select{font:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--sheet);color:var(--ink);width:100%;min-width:0}
+.fform textarea{resize:vertical;min-height:84px}
+.fform .lin{display:grid;grid-template-columns:1fr 150px;gap:8px}
+.fform .acoes{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ferr{color:var(--warn);font-size:13px}
+.obi{border-left:3px solid var(--ad);padding:6px 0 6px 12px;margin:0 0 12px}
+.obi header{display:flex;justify-content:space-between;gap:10px;font-size:13px} .obi time{color:var(--muted);white-space:nowrap}
+.obi p{margin:4px 0 0;white-space:pre-wrap;font-size:14px}
+.obop{font-size:12px;color:var(--pp);margin-top:2px}
+.obps{margin-top:6px;font-size:13px;background:var(--ad-soft);border-radius:8px;padding:6px 9px}
+.obps.venc{background:var(--warn-soft);color:var(--warn)}
+.obvazio{color:var(--muted);font-size:13.5px}
+@media (max-width:560px){.fres{grid-template-columns:repeat(2,1fr)} .fform .lin{grid-template-columns:1fr}}
+.urv{display:inline-flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;white-space:nowrap}
 
 .loginlogo{height:44px;width:auto;display:block;margin:0 0 10px}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .loginlogo{filter:brightness(0) invert(1)}}
@@ -438,9 +467,9 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 
 <!-- CONFIRMAR CARGA -->
 <dialog class="dlg" id="dlgCarga">
-  <div class="hd"><h3>Confirmar carga</h3><p>Escolha se a planilha atualiza só as oportunidades enviadas ou substitui a carteira inteira dos executivos abaixo. Os demais executivos não mudam.</p></div>
+  <div class="hd"><h3>Confirmar carga</h3><p>A planilha atualiza as oportunidades que já existem e inclui as novas. Nada que esteja fora dela é excluído.</p></div>
   <div class="bd" id="cargaBody"></div>
-  <div class="ft"><button id="cargaCancelar">Cancelar</button><button class="primary" id="cargaConfirmar">Confirmar carga</button></div>
+  <div class="ft"><button id="cargaCancelar">Cancelar</button><button class="primary" id="cargaConfirmar">Atualizar oportunidades</button></div>
 </dialog>
 
 <!-- AJUDA DO UPLOAD -->
@@ -455,7 +484,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
       <li>Pode ter outras colunas a mais; elas são ignoradas. A ordem das colunas não importa.</li>
       <li>Os nomes dos cabeçalhos precisam ser idênticos, com acentos e maiúsculas.</li>
       <li>Pode enviar um arquivo por executivo ou um arquivo com vários executivos.</li>
-      <li>Cada carga substitui a carteira dos executivos que aparecem nela; os demais não mudam.</li>
+      <li>Cada carga atualiza as oportunidades pelo Código e inclui as novas. O que não vier na planilha continua no painel; para excluir dados, peça ao administrador.</li>
     </ul>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px;cursor:pointer"><input type="checkbox" id="ajudaNaoMostrar"> Não mostrar esta ajuda de novo</label>
   </div>
@@ -527,16 +556,32 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
   </form>
 </dialog>
 
+<!-- FICHA DA CONTA -->
+<dialog class="dlg drawer" id="dlgFicha">
+  <div class="hd" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+    <div><h3 id="fTitulo"></h3><p id="fSub"></p></div>
+    <button type="button" id="fFechar" aria-label="Fechar">✕</button>
+  </div>
+  <div class="bd">
+    <div class="fres" id="fResumo"></div>
+    <div class="tbl"><table id="fOpps"></table></div>
+    <div class="fsec">Nova observação</div>
+    <form class="fform" id="fForm">
+      <textarea id="fTexto" maxlength="4000" placeholder="O que foi falado sobre esta conta na reunião?"></textarea>
+      <select id="fOpp" aria-label="Oportunidade relacionada"></select>
+      <div class="lin"><input id="fPasso" maxlength="500" placeholder="Próximo passo (opcional)"><input id="fData" type="date" aria-label="Data do próximo passo"></div>
+      <div class="acoes"><span class="ferr" id="fErr"></span><button class="primary" id="fSalvar" type="submit">Registrar observação</button></div>
+    </form>
+    <div class="fsec">Histórico <span id="fCont"></span></div>
+    <div id="fHist"></div>
+  </div>
+</dialog>
+
 <!-- HISTÓRICO -->
 <dialog class="dlg" id="dlgHist">
   <div class="hd"><h3>Histórico de cargas</h3><p id="histAviso"></p></div>
   <div class="bd">
     <div class="tbl"><table id="histTbl"></table></div>
-    <div class="row-actions hidden" id="limparBox">
-      <label for="limparSel" style="font-size:13.5px;font-weight:600">Limpar carteira de</label>
-      <select id="limparSel"></select>
-      <button class="danger" id="btnLimpar">Limpar executivo</button>
-    </div>
   </div>
   <div class="ft"><button id="histFechar">Fechar</button></div>
 </dialog>
