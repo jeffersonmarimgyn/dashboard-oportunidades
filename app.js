@@ -102,6 +102,7 @@ async function entrar(){
   $("btnMetas").classList.remove("hidden");   // vendedor também carrega as próprias metas
   $("btnUsers").classList.toggle("hidden", papel!=="dono");
   $("btnRV").classList.toggle("hidden", papel!=="dono");
+  if(papel!=="dono") db.rpc("meu_acesso_rv").then(({data})=>{ if(data===true) $("btnRV").classList.remove("hidden"); });
   $("btnRV").onclick = ()=>window.open("simulador.html","_blank");
   $("execWrap").classList.toggle("hidden", vend);
   $("histAviso").textContent = papel==="dono" ? "Desfazer uma carga faz os executivos dela voltarem para a carga anterior." : "Registro de todas as cargas feitas no painel.";
@@ -146,7 +147,11 @@ $("loginForm").addEventListener("submit", async e=>{
   if(error){ $("loginErr").textContent = /invalid/i.test(error.message) ? "E-mail ou senha incorretos." : "Não foi possível entrar: "+error.message; return; }
   $("senha").value=""; entrar();
 });
-$("btnSair").addEventListener("click", ()=>db.auth.signOut());
+$("btnSair").addEventListener("click", ()=>{
+  // apaga o salário lembrado no simulador (de qualquer login) neste navegador
+  try{ Object.keys(localStorage).filter(k=>k==="rv-fixo"||k.startsWith("rv-fixo:")).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  db.auth.signOut();
+});
 
 /* ---------- leitura do banco ---------- */
 async function carregar(){
@@ -767,7 +772,7 @@ $("metasConfirmar").addEventListener("click", async ()=>{
 
 
 /* ---------- usuários (somente dono, via Edge Function "usuarios") ---------- */
-let usuarios=[], uEdit=null, uSel=new Set(), eSel=new Set();
+let usuarios=[], uEdit=null, uSel=new Set(), eSel=new Set(), acessoRV={}, rvOn=false;
 function codigosConhecidos(){
   const m=new Map();
   rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c && !m.has(c)) m.set(c,nm(o.exec)); });
@@ -799,20 +804,25 @@ function ajustaForm(){ const g=$("uPapel").value==="usuario"; $("uCods").classLi
 async function abrirUsuarios(){ $("dlgUsers").showModal(); ajustaForm(); if(!$("uSenha").value) $("uSenha").value=senhaAleatoria(); await carregarUsuarios(); }
 async function carregarUsuarios(){
   $("uTbl").innerHTML=`<tr><td style="color:var(--muted)">Carregando…</td></tr>`;
-  try{ const d=await chamarUsuarios({action:"listar"}); usuarios=d.usuarios||[]; renderUsuarios(d.eu); }
+  try{ const d=await chamarUsuarios({action:"listar"}); usuarios=d.usuarios||[];
+    const { data:rv, error:rvErr } = await db.rpc("lista_acesso_rv"); rvOn=!rvErr; acessoRV={}; (rv||[]).forEach(x=>acessoRV[String(x.email).toLowerCase()]=!!x.acesso_rv);
+    renderUsuarios(d.eu); }
   catch(e){ $("uTbl").innerHTML=""; uMsg(e.message,false); }
 }
 function renderUsuarios(eu){
   const ord={dono:0,usuario:1,vendedor:2}; usuarios.sort((a,b)=>(ord[a.papel]??3)-(ord[b.papel]??3)||String(a.nome||a.email).localeCompare(String(b.nome||b.email),"pt-BR"));
-  $("uTbl").innerHTML=`<thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Último acesso</th><th>Senha</th><th></th></tr></thead><tbody>`+
+  $("uTbl").innerHTML=`<thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Simulador RV</th><th>Último acesso</th><th>Senha</th><th></th></tr></thead><tbody>`+
     usuarios.map((u,i)=>{ const ed=uEdit===i, eu2=(u.email||"").toLowerCase()===eu;
       if(ed) return `<tr><td><input id="eNome" value="${esc(u.nome||"")}"></td><td>${esc(loginDe(u))}</td>
         <td><select id="ePapel">${Object.entries(PAPEIS).map(([k,t])=>`<option value="${k}" ${u.papel===k?"selected":""}>${t}</option>`).join("")}</select>
           <input id="eT" placeholder="Código T" value="${esc(u.codigo_t||"")}" style="margin-top:4px;width:110px" title="Vendedor: obrigatório. Gestor/dono: opcional, é a carteira dele que já vem marcada ao entrar."></td>
-        <td colspan="2" id="eCodsCell">${u.papel==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T. Para gestor, escolha os executivos.</span>'}</td>
+        <td colspan="3" id="eCodsCell">${u.papel==="usuario"? chipsCodigos(eSel,"e") : '<span style="color:var(--muted);font-size:12px">Para vendedor, informe o código T. Para gestor, escolha os executivos.</span>'}</td>
         <td><div class="acts"><button data-u="salvar" data-i="${i}" class="primary">Salvar</button><button data-u="cancelar">Cancelar</button></div></td></tr>`;
       return `<tr><td>${esc(u.nome||"—")}${eu2?' <span class="badge">você</span>':""}</td><td>${esc(loginDe(u))}${u.tem_login?"":' <span class="badge undo">sem login</span>'}</td>
-        <td><span class="ppf ${u.papel||"nenhum"}">${u.papel?PAPEIS[u.papel]:"Sem acesso"}</span>${u.papel==="usuario"?`<div class="uhint">${(u.codigos_t||[]).length? (u.codigos_t||[]).join(", ") : "todos os executivos"}</div>`:""}</td><td>${quando(u.ultimo_acesso)}</td>
+        <td><span class="ppf ${u.papel||"nenhum"}">${u.papel?PAPEIS[u.papel]:"Sem acesso"}</span>${u.papel==="usuario"?`<div class="uhint">${(u.codigos_t||[]).length? (u.codigos_t||[]).join(", ") : "todos os executivos"}</div>`:""}</td>
+        <td>${u.papel==="dono"? '<span class="uhint">sempre</span>' : !u.papel? "—" : !rvOn? '<span class="uhint" title="Rode o script alteracao-acesso-rv.sql">indisponível</span>'
+          : `<label class="urv"><input type="checkbox" data-rv="${esc(u.email)}" ${acessoRV[String(u.email).toLowerCase()]?"checked":""}> liberado</label>${acessoRV[String(u.email).toLowerCase()] && !u.codigo_t?'<div class="uhint" style="color:var(--fct)">sem código T: não consegue simular</div>':""}`}</td>
+        <td>${quando(u.ultimo_acesso)}</td>
         <td>${u.tem_login?(u.senha_definida?"definida":'<span style="color:var(--fct)">provisória</span>'):"—"}</td>
         <td><div class="acts">${u.papel||!u.tem_login?`<button data-u="editar" data-i="${i}">Editar</button>`:`<button data-u="liberar" data-i="${i}">Dar acesso</button>`}
           ${u.tem_login?`<button data-u="senha" data-i="${i}">Redefinir senha</button>`:`<button data-u="criarlogin" data-i="${i}">Criar login</button>`}
@@ -820,6 +830,15 @@ function renderUsuarios(eu){
   $("uTbl").dataset.eu=eu||"";
 }
 $("btnUsers").addEventListener("click", abrirUsuarios);
+$("uTbl").addEventListener("change", async e=>{
+  const c=e.target.closest("[data-rv]"); if(!c) return;
+  const email=c.dataset.rv, v=c.checked; c.disabled=true;
+  const { error } = await db.rpc("definir_acesso_rv",{ p_email:email, p_valor:v });
+  c.disabled=false;
+  if(error){ c.checked=!v; uMsg(erroAmigavel(error),false); return; }
+  acessoRV[email.toLowerCase()]=v; renderUsuarios($("uTbl").dataset.eu);
+  uMsg(v? "Simulador RV liberado. A pessoa vê o botão no próximo acesso ao painel." : "Simulador RV bloqueado para este usuário.", true);
+});
 $("uFechar").addEventListener("click", ()=>{ uEdit=null; $("dlgUsers").close(); });
 $("uPapel").addEventListener("change", ajustaForm);
 $("uGerar").addEventListener("click", ()=>{ $("uSenha").value=senhaAleatoria(); });

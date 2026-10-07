@@ -319,6 +319,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
 .rvaviso{padding:10px 12px;border-radius:8px;background:var(--fc-soft);color:var(--fct);font-size:13px;margin:4px 0 12px}
 .rvneg{color:var(--warn)}.rvpos{color:var(--won)}
 @media (max-width:900px){.rvctl,.rvcards,.rvmeses{grid-template-columns:1fr 1fr}#rvRegras{grid-template-columns:1fr 1fr}}
+.rvaviso{grid-column:1/-1;margin:-4px 0 0;font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -352,6 +353,7 @@ dialog.dlg::backdrop{background:rgba(6,20,40,.55)}
         <option value="0">Realizado + todo o previsto</option></select></label>
       <label>Salário fixo mensal<div class="rvfixo"><input id="rvFixo" type="password" inputmode="decimal" autocomplete="off" placeholder="R$ 0,00"><button type="button" id="rvOlho" title="Mostrar/ocultar">👁</button></div></label>
       <label class="rvchk"><input type="checkbox" id="rvLembrar"> Lembrar o salário neste navegador</label>
+      <p class="rvaviso">Use só em computador pessoal. O valor fica guardado apenas neste navegador, separado por login, e é apagado quando você clica em Sair no painel.</p>
     </div>
     <details class="rvreg"><summary>Regras do plano (gatilho, teto, pesos e campanhas)</summary><div id="rvRegras"></div></details>
     <div id="rvOut"></div>

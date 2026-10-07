@@ -1,4 +1,5 @@
-/* Simulador de RV — página própria (somente dono). O salário nunca sai do navegador. */
+/* Simulador de RV — página própria. Acesso: dono ou usuário liberado (acesso_rv). Quem não é dono simula só a própria carteira.
+   O salário nunca sai do navegador; se "lembrar" estiver marcado, fica guardado por login e é apagado ao sair do painel. */
 const CFG = window.APP_CONFIG || {};
 const db = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY);
 const MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -45,7 +46,7 @@ async function lerTudo(tabela){
   while(true){ const { data, error } = await db.from(tabela).select("*").range(from, from+999); if(error) throw error; out.push(...data); if(data.length<1000) break; from+=1000; }
   return out;
 }
-function aviso(html){ $("rvPage").innerHTML=`<div class="empty" style="margin-top:20px">${html}</div>`; }
+function aviso(html){ $("rvPage").innerHTML=`<div class="empty" style="margin-top:20px">${html}</div>`; $("rvPage").classList.remove("hidden"); $("rvCarregando").classList.add("hidden"); }
 
 /* ---------- motor do Simulador RV (mesmas fórmulas da planilha) ---------- */
 function calcRV(p, meses){
@@ -72,25 +73,28 @@ function calcSCC(s){ // s: {meta, real, gatilho, repIni, repFim, campanha, realT
   return {at, pct, valor, acel, total: valor+acel};
 }
 
-/* ---------- simulador RV (somente dono, por enquanto) ---------- */
+/* ---------- simulador RV ---------- */
+let SOU_DONO=false, MEU_COD=null, CHAVE_FIXO="rv-fixo";   // a chave do salário é por login (definida ao entrar)
+const lerFixo = () => { try{ return Number(localStorage.getItem(CHAVE_FIXO))||0; }catch(e){ return 0; } };
 const MIX_FIXO=0.6;   // plano 60% fixo / 40% variável (padrão da planilha)
 const RV_PADRAO={gatilho:0.4,teto:3,pesoNR:0.2,pesoRR:0.5,pesoSV:0.3,campNR:0,campRR:0.2,campSV:0.1,sccGat:0.4,sccIni:0.15,sccFim:0.5,sccCamp:130000,sccAcel:0.2};
 let rvReg=(()=>{ try{ return {...RV_PADRAO, ...JSON.parse(localStorage.getItem("rv-regras")||"{}")}; }catch(e){ return {...RV_PADRAO}; } })();
-let rvFixo=(()=>{ try{ return Number(localStorage.getItem("rv-fixo"))||0; }catch(e){ return 0; } })();   // só no navegador
+let rvFixo=0;   // só no navegador
 let rvOver={}, rvTBC=null, rvSccMeta=null;
 const brl2=v=>(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const pct1=v=>v==null?"—":(v*100).toLocaleString("pt-BR",{maximumFractionDigits:1})+"%";
 const parseBR=v=>{ const t=String(v||"").replace(/[R$\s]/g,""); const n=t.includes(",")? Number(t.replace(/\./g,"").replace(",",".")) : Number(t); return Number.isFinite(n)?n:0; };
 function rvInit(){
-  const cods=[...new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.concat(ganhas).map(o=>codigoT(o.exec))].filter(Boolean))].sort();
+  const cods = SOU_DONO? [...new Set([...metas.map(m=>m.codigo_t.toUpperCase()), ...rows.concat(ganhas).map(o=>codigoT(o.exec))].filter(Boolean))].sort() : [MEU_COD];
   const nomeDe={}; rows.concat(ganhas).forEach(o=>{ const c=codigoT(o.exec); if(c&&!nomeDe[c]) nomeDe[c]=nm(o.exec); });
   const atual=$("rvExec").value || (cods.includes("T30535")?"T30535":cods[0]);
   $("rvExec").innerHTML=cods.map(c=>`<option value="${c}" ${c===atual?"selected":""}>${esc(nomeDe[c]||c)} · ${c}</option>`).join("");
+  $("rvExec").disabled = !SOU_DONO;
   const anos=[...new Set(metas.map(m=>+String(m.mes).slice(0,4)).concat([TODAY.getFullYear()]))].sort();
   const triAtual=`${TODAY.getFullYear()}-${Math.floor(TODAY.getMonth()/3)+1}`, sel=$("rvTri").value||triAtual;
   $("rvTri").innerHTML=anos.flatMap(a=>[1,2,3,4].map(q=>`<option value="${a}-${q}" ${`${a}-${q}`===sel?"selected":""}>${q}º trimestre de ${a}</option>`)).join("");
   $("rvFixo").value = rvFixo? rvFixo.toLocaleString("pt-BR",{minimumFractionDigits:2}) : "";
-  try{ $("rvLembrar").checked = !!localStorage.getItem("rv-fixo"); }catch(e){}
+  try{ $("rvLembrar").checked = !!localStorage.getItem(CHAVE_FIXO); }catch(e){}
   const campos=[["Gatilho (mínimo de atingimento)","gatilho",true],["Teto (máximo de atingimento)","teto",true],
     ["Peso Software NR (Adesão)","pesoNR",true],["Peso Software RR","pesoRR",true],["Peso Serviços NR (Implantação)","pesoSV",true],
     ["Campanha TRI Software NR","campNR",true],["Campanha TRI Software RR","campRR",true],["Campanha TRI Serviços","campSV",true],
@@ -159,8 +163,8 @@ function rvRender(){
 $("rvOlho").addEventListener("click", ()=>{ const i=$("rvFixo"); i.type= i.type==="password"? "text" : "password"; });
 $("rvRestaurar").addEventListener("click", ()=>{ rvOver={}; rvTBC=null; rvSccMeta=null; rvRender(); });
 ["rvExec","rvTri","rvCen"].forEach(id=>$(id).addEventListener("change", ()=>{ rvTBC=null; rvSccMeta=null; rvRender(); }));
-$("rvFixo").addEventListener("change", ()=>{ rvFixo=parseBR($("rvFixo").value); if($("rvLembrar").checked){ try{ localStorage.setItem("rv-fixo", String(rvFixo)); }catch(e){} } rvRender(); });
-$("rvLembrar").addEventListener("change", e=>{ try{ e.target.checked? localStorage.setItem("rv-fixo", String(rvFixo)) : localStorage.removeItem("rv-fixo"); }catch(err){} });
+$("rvFixo").addEventListener("change", ()=>{ rvFixo=parseBR($("rvFixo").value); if($("rvLembrar").checked){ try{ localStorage.setItem(CHAVE_FIXO, String(rvFixo)); }catch(e){} } rvRender(); });
+$("rvLembrar").addEventListener("change", e=>{ try{ e.target.checked? localStorage.setItem(CHAVE_FIXO, String(rvFixo)) : localStorage.removeItem(CHAVE_FIXO); }catch(err){} });
 document.addEventListener("change", e=>{
   const t=e.target;
   if(t.dataset.rvreal){ const {cod,cen}={cod:$("rvExec").value,cen:$("rvCen").value}; rvOver[`${t.dataset.rvreal}|${cod}|${cen}`]=parseBR(t.value); rvRender(); }
@@ -175,7 +179,18 @@ document.addEventListener("click", e=>{ if(e.target.id==="rvPadrao"){ rvReg={...
   const { data:{ session } } = await db.auth.getSession();
   if(!session){ aviso('<b>Você não está conectado</b>Entre no <a href="./">painel</a> e clique de novo em "Simulador RV".'); return; }
   const { data:perfil } = await db.rpc("meu_perfil");
-  if(!perfil || perfil.papel!=="dono"){ aviso('<b>Acesso restrito</b>Por enquanto, o simulador está disponível apenas para o dono do painel.'); return; }
+  SOU_DONO = !!perfil && perfil.papel==="dono";
+  if(!SOU_DONO){
+    const { data:ok, error } = await db.rpc("meu_acesso_rv");
+    if(error || !ok){ aviso('<b>Acesso restrito</b>O simulador não está liberado para o seu usuário. Peça ao responsável pelo painel.'); return; }
+    MEU_COD = perfil && perfil.codigo_t ? String(perfil.codigo_t).toUpperCase() : null;
+    if(!MEU_COD){ aviso('<b>Código T não cadastrado</b>Seu login ainda não tem código T vinculado. Peça ao responsável pelo painel para informar o seu código na tela de usuários.'); return; }
+  }
+  // salário lembrado: uma chave por login; a chave antiga (única para todos) é migrada para o dono ou apagada
+  const email = String(session.user && session.user.email || "").toLowerCase();
+  CHAVE_FIXO = "rv-fixo:"+email;
+  try{ const antigo=localStorage.getItem("rv-fixo"); if(antigo!=null){ if(SOU_DONO && !localStorage.getItem(CHAVE_FIXO)) localStorage.setItem(CHAVE_FIXO, antigo); localStorage.removeItem("rv-fixo"); } }catch(e){}
+  rvFixo = lerFixo();
   try{
     const [a,g,m]=await Promise.all([lerTudo("oportunidades_atuais"), lerTudo("oportunidades_ganhas"), lerTudo("metas")]);
     rows=a.map(toView).filter(o=>o.p!==100);
