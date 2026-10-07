@@ -73,6 +73,24 @@ function calcSCC(s){ // s: {meta, real, gatilho, repIni, repFim, campanha, realT
   return {at, pct, valor, acel, total: valor+acel};
 }
 
+/* ---------- formato da planilha e calendário de pagamento ---------- */
+const pct2=v=>v==null?"—":(v*100).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+"%";   // indicadores: 60,00%
+const pct0=v=>v==null?"—":Math.round(v*100).toLocaleString("pt-BR")+"%";                                          // totais: 300%
+function pascoa(a){ const b=a%19,c=Math.floor(a/100),d=a%100,e=Math.floor(c/4),f=c%4,g=Math.floor((c+8)/25),h=Math.floor((c-g+1)/3),
+  i=(19*b+c-e-h+15)%30,k=Math.floor(d/4),l=d%4,m=(32+2*f+2*k-i-l)%7,n=Math.floor((b+11*i+22*m)/451),mes=Math.floor((i+m-7*n+114)/31),dia=((i+m-7*n+114)%31)+1;
+  return new Date(a,mes-1,dia); }
+function feriados(a){   // feriados nacionais + carnaval, sexta-feira santa e Corpus Christi (bancos fechados)
+  const f=new Set(["01-01","04-21","05-01","09-07","10-12","11-02","11-15","11-20","12-25"].map(x=>`${a}-${x}`));
+  const p=pascoa(a); [-48,-47,-2,60].forEach(d=>{ const x=new Date(p); x.setDate(x.getDate()+d); f.add(iso(x)); });
+  return f; }
+function quintoDiaUtil(a, m){   // m = 1..12; dias úteis = segunda a sexta, sem feriado
+  const f=feriados(a); let n=0;
+  for(let d=1; d<=31; d++){ const x=new Date(a,m-1,d); if(x.getMonth()!==m-1) break; const w=x.getDay();
+    if(w>0 && w<6 && !f.has(iso(x)) && ++n===5) return x; }
+  return null; }
+const pagamentoDe = k => { const a=+k.slice(0,4), m=+k.slice(5,7)+2; return quintoDiaUtil(a+Math.floor((m-1)/12), ((m-1)%12)+1); };   // competência + 2 meses
+const dataBR = d => d? d.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+
 /* ---------- simulador RV ---------- */
 let SOU_DONO=false, MEU_COD=null, CHAVE_FIXO="rv-fixo";   // a chave do salário é por login (definida ao entrar)
 const lerFixo = () => { try{ return Number(localStorage.getItem(CHAVE_FIXO))||0; }catch(e){ return 0; } };
@@ -130,33 +148,44 @@ function rvRender(){
   let h="";
   if(semSal) h+=`<div class="rvaviso">Digite o seu <b>salário fixo mensal</b> acima para ver os valores em reais. Os percentuais de atingimento já aparecem abaixo.</div>`;
   if(semMeta) h+=`<div class="rvaviso">Não há metas cadastradas para ${cod} neste trimestre. Carregue as metas em "Carregar metas".</div>`;
+  const ult=meses[meses.length-1].k, nomeCurto=k=>MESL[+k.slice(5,7)-1].toLowerCase();
   h+=`<div class="rvcards">
-    <div class="rvcard"><span>Referência variável mensal</span><b>${semSal?"—":brl2(r.RV)}</b></div>
-    <div class="rvcard"><span>Pago mês a mês (soma do tri)</span><b>${semSal?"—":brl2(r.pago)}</b></div>
-    <div class="rvcard"><span>Ajuste no fechamento do tri</span><b class="${r.difCamp<0?"rvneg":"rvpos"}">${semSal?"—":brl2(r.difCamp)}</b></div>
-    <div class="rvcard"><span>Campanha SCC</span><b>${semSal?"—":brl2(sc.total)}</b></div>
-    <div class="rvcard dest"><span>Variável total no tri (com campanhas)</span><b>${semSal?pct1(r.somaCamp)+" da RV":brl2(r.apuracaoCamp+sc.total)}</b></div>
+    <div class="rvcard"><span>RV mensal (100% da meta)</span><b>${semSal?"—":brl2(r.RV)}</b></div>
+    ${meses.map((m,i)=>`<div class="rvcard"><span>RV de ${nomeCurto(m.k)} · recebe ${pagamentoDe(m.k)?pagamentoDe(m.k).toLocaleDateString("pt-BR"):"—"}</span><b>${semSal?pct0(Math.min(r.mensal[i].soma,1)):brl2(r.mensal[i].valor)}</b></div>`).join("")}
+    <div class="rvcard dest"><span>Fechamento do tri · recebe ${pagamentoDe(ult)?pagamentoDe(ult).toLocaleDateString("pt-BR"):"—"}</span><b class="${r.difCamp<0?"rvneg":""}">${semSal?"—":brl2(r.difCamp+sc.total)}</b></div>
   </div>`;
   const nomeMes=k=>MESL[+k.slice(5,7)-1]+"/"+k.slice(0,4);
   h+=`<div class="rvmeses">`+meses.map((m,i)=>{ const mr=r.mensal[i];
-    return `<div class="rvtab"><h4>${nomeMes(m.k)}</h4><table><thead><tr><th>Indicador</th><th class="n">Meta</th><th class="n">Realizado</th><th class="n">Ating.</th><th class="n">Fator</th></tr></thead><tbody>`+
-      IND.map(x=>{ const ov=rvOver[`${m.k}|${x.k}|${cod}|${cen}`]!=null, at=m.meta[x.k]>0? m.real[x.k]/m.meta[x.k] : null;
-        return `<tr><td>${x.nome.split(" (")[0]}</td><td class="n">${brl(m.meta[x.k])}</td>
+    return `<div class="rvtab"><h4>${nomeMes(m.k)}</h4><table><thead><tr><th>Indicador</th><th class="n">Meta</th><th class="n">Realizado</th><th class="n" title="Quanto do valor da meta foi atingido">% meta</th><th class="n" title="Percentual já ponderado pelo peso do indicador (é o que vira valor)">% peso</th><th class="n">Valor</th></tr></thead><tbody>`+
+      IND.map(x=>{ const ov=rvOver[`${m.k}|${x.k}|${cod}|${cen}`]!=null, at=m.meta[x.k]>0? m.real[x.k]/m.meta[x.k] : null, abaixo=at!=null&&at<rvReg.gatilho;
+        return `<tr><td>${x.nome.split(" (")[0]}</td><td class="n">${brl2(m.meta[x.k])}</td>
           <td class="n"><input class="${ov?"ov":""}" data-rvreal="${m.k}|${x.k}" value="${m.real[x.k].toLocaleString("pt-BR",{maximumFractionDigits:2})}" title="Valor do painel: ${brl2(m.base[x.k])}. Edite para simular."></td>
-          <td class="n ${at!=null&&at<rvReg.gatilho?"rvneg":""}">${pct1(at)}</td><td class="n">${pct1(mr.por[x.k])}</td></tr>`; }).join("")+
-      `<tr class="rvtot"><td colspan="4">Apuração do mês</td><td class="n">${pct1(mr.soma)}</td></tr>
-       <tr class="rvtot"><td colspan="4">Valor a ser pago (até 100% da RV)</td><td class="n">${semSal?"—":brl2(mr.valor)}</td></tr></tbody></table></div>`; }).join("")+`</div>`;
-  h+=`<div class="rvsec"><h4>Balanço do trimestre</h4><div class="tbl"><table><thead><tr><th>Indicador</th><th class="n">Peso</th><th class="n">Meta tri</th><th class="n">Realizado tri</th><th class="n">Ating.</th><th class="n">Fator</th><th class="n">Valor apurado</th><th class="n">Fator c/ campanha</th><th class="n">Valor c/ campanha</th></tr></thead><tbody>`+
-    IND.map(x=>{ const t=r.tri[x.k]; return `<tr><td>${x.nome}</td><td class="n">${pct1(x.peso)}</td><td class="n">${brl(t.meta)}</td><td class="n">${brl(t.real)}</td><td class="n ${t.at!=null&&t.at<rvReg.gatilho?"rvneg":""}">${pct1(t.at)}</td><td class="n">${pct1(t.f)}</td><td class="n">${semSal?"—":brl2(t.valor)}</td><td class="n">${pct1(t.camp)}${t.camp>t.f?' <span class="rvpos">▲</span>':""}</td><td class="n">${semSal?"—":brl2(t.valorCamp)}</td></tr>`; }).join("")+
-    `<tr class="rvtot"><td colspan="5">Atingimento do tri</td><td class="n">${pct1(r.somaTri)}</td><td class="n">${semSal?"—":brl2(r.apuracaoTri)}</td><td class="n">${pct1(r.somaCamp)}</td><td class="n">${semSal?"—":brl2(r.apuracaoCamp)}</td></tr>
-     <tr><td colspan="6">Já pago mês a mês</td><td class="n">${semSal?"—":brl2(r.pago)}</td><td></td><td class="n">${semSal?"—":brl2(r.pago)}</td></tr>
-     <tr class="rvtot"><td colspan="6">Diferença no fechamento do tri</td><td class="n ${r.dif<0?"rvneg":"rvpos"}">${semSal?"—":brl2(r.dif)}</td><td></td><td class="n ${r.difCamp<0?"rvneg":"rvpos"}">${semSal?"—":brl2(r.difCamp)}</td></tr>
+          <td class="n ${abaixo?"rvneg":""}" title="${abaixo?"Abaixo do gatilho de "+pct1(rvReg.gatilho)+": não paga":at!=null&&at>rvReg.teto?"Acima do teto de "+pct1(rvReg.teto)+": o % peso usa o teto":""}">${pct2(at)}</td>
+          <td class="n" title="Peso ${pct1(x.peso)}">${pct2(mr.por[x.k])}</td><td class="n">${semSal?"—":brl2(mr.por[x.k]*r.RV)}</td></tr>`; }).join("")+
+      `<tr class="rvtot"><td colspan="4">Apuração mensal</td><td class="n">${pct0(mr.soma)}</td><td class="n">${semSal?"—":brl2(mr.soma*r.RV)}</td></tr>
+       <tr class="rvtot rvpagar"><td colspan="4">Valor a ser pago <small>· recebe ${dataBR(pagamentoDe(m.k))}</small></td><td></td><td class="n">${semSal?"—":brl2(mr.valor)}</td></tr></tbody></table></div>`; }).join("")+`</div>`;
+  h+=`<div class="rvsec"><h4>Balanço do trimestre</h4><div class="tbl"><table><thead><tr><th>Indicador</th><th class="n">Meta</th><th class="n">Realizado</th><th class="n" title="Quanto do valor da meta foi atingido">% meta</th><th class="n" title="Percentual já ponderado pelo peso do indicador">% peso</th><th class="n">Valor apurado</th><th class="n">% Campanha</th><th class="n">Valor c/ campanha</th></tr></thead><tbody>`+
+    IND.map(x=>{ const t=r.tri[x.k], abaixo=t.at!=null&&t.at<rvReg.gatilho; return `<tr><td>${x.nome}</td><td class="n">${brl2(t.meta)}</td><td class="n">${brl2(t.real)}</td>
+      <td class="n ${abaixo?"rvneg":""}">${pct2(t.at)}</td><td class="n" title="Peso ${pct1(x.peso)}">${pct2(t.f)}</td><td class="n">${semSal?"—":brl2(t.valor)}</td>
+      <td class="n">${pct2(t.camp)}${t.camp>t.f?' <span class="rvpos">▲</span>':""}</td><td class="n">${semSal?"—":brl2(t.valorCamp)}</td></tr>`; }).join("")+
+    `<tr class="rvtot"><td colspan="4">Atingimento TRI</td><td class="n">${pct0(r.somaTri)}</td><td></td><td class="n">${pct0(r.somaCamp)}</td><td></td></tr>
+     <tr><td colspan="4">Apuração TRI</td><td></td><td class="n">${semSal?"—":brl2(r.apuracaoTri)}</td><td></td><td class="n">${semSal?"—":brl2(r.apuracaoCamp)}</td></tr>
+     <tr><td colspan="4">Valor pago (mês a mês)</td><td></td><td class="n">${semSal?"—":brl2(r.pago)}</td><td></td><td class="n">${semSal?"—":brl2(r.pago)}</td></tr>
+     <tr class="rvtot"><td colspan="4">Diferença</td><td></td><td class="n ${r.dif<0?"rvneg":"rvpos"}">${semSal?"—":brl2(r.dif)}</td><td></td><td class="n ${r.difCamp<0?"rvneg":"rvpos"}">${semSal?"—":brl2(r.difCamp)}</td></tr>
     </tbody></table></div>
-    <p style="font-size:12px;color:var(--muted);margin:6px 0 0">Cenário: ${esc(cenTxt)}. Realizado = ganhas (100%) no mês da data prevista${cen==="real"?"":" + oportunidades em andamento do cenário"}. Campos em azul foram editados por você. Abaixo do gatilho (${pct1(rvReg.gatilho)}), o indicador não paga; o teto é ${pct1(rvReg.teto)}.</p></div>`;
+    <p style="font-size:12px;color:var(--muted);margin:6px 0 0">Cenário: ${esc(cenTxt)}. Realizado = ganhas (100%) no mês da data prevista${cen==="real"?"":" + oportunidades em andamento do cenário"}. Campos em azul foram editados por você. "% meta" é quanto da meta do indicador foi atingido; "% peso" é esse atingimento multiplicado pelo peso do indicador, e é ele que vira valor. Abaixo do gatilho (${pct1(rvReg.gatilho)} da meta) o indicador não paga; acima do teto (${pct1(rvReg.teto)}) o % peso para de subir.</p></div>`;
   h+=`<div class="rvsec"><h4>Campanha SCC do trimestre</h4><div class="tbl"><table><thead><tr><th class="n">Meta tri</th><th class="n">Realizado tri</th><th class="n">Ating.</th><th class="n">% de repasse</th><th class="n">Valor apurado</th><th class="n">Realizado TBC (campanha ${brl(rvReg.sccCamp)})</th><th class="n">Acelerador</th><th class="n">Total</th></tr></thead><tbody>
     <tr><td class="n"><input data-rvscc="meta" value="${sMeta.toLocaleString("pt-BR")}" style="width:110px;text-align:right"></td><td class="n">${brl2(sReal)}</td><td class="n">${pct1(sc.at)}</td><td class="n">${pct1(sc.pct)}</td><td class="n">${brl2(sc.valor)}</td>
     <td class="n"><input data-rvscc="tbc" value="${tbc.toLocaleString("pt-BR")}" style="width:120px;text-align:right"></td><td class="n">${brl2(sc.acel)}</td><td class="n"><b>${brl2(sc.total)}</b></td></tr></tbody></table></div>
     <p style="font-size:12px;color:var(--muted);margin:6px 0 0">O SCC paga um percentual sobre o realizado: ${pct1(rvReg.sccIni)} ao atingir o gatilho de ${pct1(rvReg.sccGat)}, subindo até ${pct1(rvReg.sccFim)} em 100%. O acelerador de ${pct1(rvReg.sccAcel)} vale quando o realizado TBC atinge a meta da campanha.</p></div>`;
+  if(!semSal){ const dUlt=pagamentoDe(ult);
+    const lin=meses.map((m,i)=>[`RV de ${nomeMes(m.k)}`, pagamentoDe(m.k), r.mensal[i].valor]);
+    lin.push(["Diferença do fechamento do tri (com campanhas)", dUlt, r.difCamp]); if(sc.total) lin.push(["Campanha SCC do tri", dUlt, sc.total]);
+    const porData={}; lin.forEach(([,d,v])=>{ const k=iso(d); porData[k]=(porData[k]||0)+v; });
+    h+=`<div class="rvsec"><h4>Calendário de recebimento</h4><div class="tbl"><table><thead><tr><th>O que é</th><th>Recebe em (5º dia útil)</th><th class="n">Valor</th></tr></thead><tbody>`+
+      lin.map(([t,d,v])=>`<tr><td>${t}</td><td>${dataBR(d)}</td><td class="n ${v<0?"rvneg":""}">${brl2(v)}</td></tr>`).join("")+
+      `<tr class="rvtot"><td colspan="2">Total variável do trimestre</td><td class="n">${brl2(lin.reduce((a,x)=>a+x[2],0))}</td></tr></tbody></table></div>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 0">Cada mês é pago no 5º dia útil do segundo mês seguinte (ex.: setembro → novembro). Dias úteis de segunda a sexta, sem feriados nacionais. Em ${dataBR(dUlt)} entram juntos ${brl2(porData[iso(dUlt)])}.</p></div>`; }
   if(!semSal) h+=`<div class="rvsec"><h4>Remuneração estimada no trimestre</h4><p style="font-size:13.5px;margin:0">Fixo ${brl2(rvFixo*3)} + variável ${brl2(r.apuracaoCamp)} + SCC ${brl2(sc.total)} = <b>${brl2(rvFixo*3+r.apuracaoCamp+sc.total)}</b> (valores brutos, antes de impostos).</p></div>`;
   $("rvOut").innerHTML=h;
 }
