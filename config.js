@@ -4,5 +4,5 @@
 window.APP_CONFIG = {
   SUPABASE_URL: "https://ysiamxdglgaygnimudor.supabase.co",
   SUPABASE_KEY: "sb_publishable_cVQEq-tPuFpoF52EdePRnw_01f9hnyP",
-  LOGO: ""   // opcional: caminho de uma imagem, ex.: "logo.png"
+  LOGO: "logo-totvs-branco.png"   // opcional: caminho de uma imagem, ex.: "logo.png"
 };
